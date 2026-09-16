@@ -80,8 +80,9 @@ Identity on every commit: `Alpha N <45754668+alphan-ml@users.noreply.github.com>
 
 ## What is NOT done
 
-- Nothing is deployed and no site file is touched -- out of scope for
-  this build by the standing rule (see `.env.example`).
+- Nothing was deployed as of the initial build session -- see the
+  "live scoring endpoint" decision and task report below for the
+  AWS Lambda deploy done in a later session.
 - The Kaggle test set (`test_transaction.csv`/`test_identity.csv`,
   506,691 rows) is cleaned and available at `data/clean/test.parquet` but
   is never scored or submitted -- it has no `isFraud` labels, so there is
@@ -94,8 +95,8 @@ Identity on every commit: `Alpha N <45754668+alphan-ml@users.noreply.github.com>
   model-selection step performed.
 - `score.py` scores one transaction (or a small in-memory batch via
   repeated calls) at a time; there is no batch-file or streaming
-  interface, and no serving process (API, queue consumer) is stood up --
-  that would be a deployment decision for the parent session.
+  interface. A serving process (Lambda + API Gateway) was stood up in a
+  later session -- see below.
 - SHAP / per-prediction feature attribution was not built; only aggregate
   LightGBM gain-based importance (`top_feature_importance` in
   `outputs/metrics.json`) is available.
@@ -110,3 +111,82 @@ python3 -m ruff check .             # clean
 ```
 
 To retrain from scratch: `python3 -m fraud_radar.cli all --force`.
+
+## Decision -- live scoring endpoint (2026-09-16)
+
+Deployed `score.py`'s model as an HTTPS endpoint on AWS, mirroring the
+buyer-value-radar Lambda pattern (S3 model bucket, IAM role scoped to
+`s3:GetObject`, Lambda downloading into `/tmp` on cold start, API Gateway
+HTTP API with CORS). Full writeup, infra list, and verification numbers:
+README.md, "Live scoring API" section.
+
+Departures from the buyer-value-radar reference, and why:
+
+- **arm64, not x86_64.** The build machine is Apple Silicon, so
+  cross-installing x86_64 manylinux wheels for numpy/scipy/lightgbm
+  hit a glibc mismatch at runtime (`lightgbm==4.7.0`'s x86_64 wheel is
+  `manylinux_2_28`, glibc 2.28+; the Lambda `python3.11` base image's
+  glibc is older). `lightgbm`'s aarch64 wheel is `manylinux2014`
+  (glibc 2.17+), which the Lambda arm64 runtime satisfies, and arm64
+  wheels install natively on this machine with no cross-platform
+  guesswork. Lambda function architecture set to `arm64` to match.
+- **No pandas, no scikit-learn bundled.** `fraud_radar.features` and
+  `fraud_radar.score` are pandas-based; bundling pandas + scikit-learn +
+  their transitive scipy footprint pushed the unzipped package close to
+  the 250 MB Lambda limit even after trimming. The handler reimplements
+  `build_features()`/`score_one()` in pure numpy instead -- verified
+  byte-identical (0.0 max abs diff) against the real `score.py` on 20
+  real holdout rows. See README's "How the handler mirrors score.py".
+- **A real quirk found during verification, reproduced not fixed:**
+  `build_features()`'s count-encoded columns (`card1_count`,
+  `addr1_count`, `P_emaildomain_count`) are computed from
+  `df[c].value_counts()` on whatever frame is passed in. At serving
+  time that frame is always one row, so these columns are always `1.0`
+  in `score_one()`'s real output -- not the training-time population
+  frequency. The Lambda reproduces this exactly (hard-coded `1.0`) to
+  match `score.py`, rather than silently "fixing" it and breaking the
+  0.0-diff requirement. Logged here as a real limitation of the
+  existing serving code, independent of this deploy.
+- scipy is trimmed to only what `scipy.sparse` (a hard, unguarded import
+  in `lightgbm/basic.py`) actually needs at import time: `sparse`,
+  `sparse.linalg`, `linalg`, `special`, `fft`, `_lib`, plus `scipy.libs`
+  for the BLAS dependencies of `sparse.linalg`'s `dsolve`/`eigen`.
+  `stats`, `optimize`, `spatial`, `io`, `signal`, `interpolate`,
+  `integrate`, `ndimage`, `cluster`, `fftpack`, `odr`, `differentiate`,
+  `datasets`, `misc` are removed (~35 MB). Confirmed via `grep` that
+  nothing in the kept modules' source references the removed ones.
+- `lib/libgomp.so.1` (arm64) is vendored the same way buyer-value-radar
+  vendors the x86_64 one -- lightgbm's compiled core needs OpenMP and
+  the Lambda base image doesn't ship it. Sourced from a throwaway
+  `scikit-learn` aarch64 wheel install (same shared library, scikit-learn
+  itself is not bundled).
+
+## Task report -- fraud-score-transaction endpoint (2026-09-16)
+
+- **Live URL**: `https://r3skxlusm4.execute-api.us-east-1.amazonaws.com`
+  (routes: `GET /health`, `GET /examples`, `POST /score`).
+- **AWS resources created**: S3 `giggit-fraud-radar-models`, IAM role
+  `fraud-lambda-execution-role`, Lambda `fraud-score-transaction`
+  (python3.11, arm64, 1024 MB, 30 s), API Gateway HTTP API
+  `fraud-score-api`.
+- **Verification**: 20 real holdout transactions, local `score_one()`
+  vs. live Lambda (direct invoke) vs. live public API Gateway URL (curl)
+  -- max abs diff on `calibrated_probability` across all three: 0.0, all
+  20 `review_flag` values matched. Reproducible via
+  `aws-lambda/build_verification.py` + `aws-lambda/test_invoke.py`.
+- **Live curl proof**: `/health` 200, `/examples` 200 (10 real holdout
+  rows with full input dicts, 58 KB), `/score` on holdout transaction
+  3459432 returns `{"calibrated_probability": 0.01709, "review_flag":
+  false}` matching the local reference exactly, missing-field POST
+  returns 400, `OPTIONS /score` preflight returns the CORS headers for
+  `https://www.giggitai.com`.
+- **Not done**: no site page built for Fraud Radar yet (out of scope
+  for this task -- endpoint only); no rate limiting / API key on the
+  endpoint (matches buyer-value-radar's open endpoint); no CloudWatch
+  alarm or budget check run this session (see the standing AWS budget
+  alarm from the deploy runbook, which already covers all live Giggit
+  systems); `card1_count`/`addr1_count`/`P_emaildomain_count` are inert
+  at serving time (see decision above) -- a real fix would need the
+  Lambda to carry the training-time population counts, which changes
+  `score.py`'s serving contract and was out of scope for "mirror
+  exactly."
