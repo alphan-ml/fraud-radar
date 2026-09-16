@@ -1,0 +1,13 @@
+{
+  "n_total": 590540,
+  "n_train": 425189,
+  "n_val": 47243,
+  "n_holdout": 118108,
+  "cutoff_dt_train_pool_vs_holdout": 12192842,
+  "val_cutoff_dt_train_vs_val": 10766698,
+  "train_fraud_rate": 0.035149074881993654,
+  "val_fraud_rate": 0.03501047774273437,
+  "scale_pos_weight": 27.450250920040148,
+  "best_iteration": 169,
+  "seed": 26
+}

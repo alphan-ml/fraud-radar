@@ -1,0 +1,278 @@
+{
+  "model": "fraud-radar",
+  "dataset_facts": {
+    "source": "Kaggle competition ieee-fraud-detection (IEEE-CIS Fraud Detection)",
+    "zip_sha256": "4cc646da09d0a9b265983ffed775b1f9ee15af5266586df610e04d6adae0b829",
+    "zip_bytes": 123856947,
+    "train_transaction_rows": 590540,
+    "train_fraud_count": 20663,
+    "train_fraud_rate": 0.03499,
+    "train_transaction_dt_min": 86400,
+    "train_transaction_dt_max": 15811131,
+    "merged_train_rows": 590540,
+    "merged_train_columns": 434,
+    "test_rows_set_aside_no_labels": 506691
+  },
+  "split": {
+    "n_total": 590540,
+    "n_train": 425189,
+    "n_val": 47243,
+    "n_holdout": 118108,
+    "cutoff_dt_train_pool_vs_holdout": 12192842,
+    "val_cutoff_dt_train_vs_val": 10766698,
+    "train_fraud_rate": 0.035149074881993654,
+    "val_fraud_rate": 0.03501047774273437,
+    "scale_pos_weight": 27.450250920040148,
+    "best_iteration": 169,
+    "seed": 26
+  },
+  "metrics": {
+    "roc_auc": 0.8935432901709163,
+    "pr_auc": 0.5070429412996057,
+    "brier_score": 0.022254943076573455,
+    "holdout_n": 118108,
+    "holdout_fraud_count": 4064,
+    "holdout_fraud_rate": 0.034409
+  },
+  "review_queue": [
+    {
+      "top_fraction": 0.005,
+      "n_reviewed": 591,
+      "true_positives": 543,
+      "precision": 0.9188,
+      "recall": 0.1336
+    },
+    {
+      "top_fraction": 0.01,
+      "n_reviewed": 1181,
+      "true_positives": 1047,
+      "precision": 0.8865,
+      "recall": 0.2576
+    },
+    {
+      "top_fraction": 0.02,
+      "n_reviewed": 2362,
+      "true_positives": 1663,
+      "precision": 0.7041,
+      "recall": 0.4092
+    },
+    {
+      "top_fraction": 0.05,
+      "n_reviewed": 5905,
+      "true_positives": 2306,
+      "precision": 0.3905,
+      "recall": 0.5674
+    }
+  ],
+  "calibration_table": [
+    {
+      "bin": 1,
+      "count": 11810,
+      "mean_predicted": 0.000266,
+      "observed_fraud_rate": 0.001778
+    },
+    {
+      "bin": 2,
+      "count": 11811,
+      "mean_predicted": 0.001242,
+      "observed_fraud_rate": 0.001947
+    },
+    {
+      "bin": 3,
+      "count": 11811,
+      "mean_predicted": 0.001781,
+      "observed_fraud_rate": 0.003895
+    },
+    {
+      "bin": 4,
+      "count": 11811,
+      "mean_predicted": 0.002241,
+      "observed_fraud_rate": 0.006435
+    },
+    {
+      "bin": 5,
+      "count": 11811,
+      "mean_predicted": 0.00274,
+      "observed_fraud_rate": 0.007705
+    },
+    {
+      "bin": 6,
+      "count": 11810,
+      "mean_predicted": 0.00662,
+      "observed_fraud_rate": 0.011092
+    },
+    {
+      "bin": 7,
+      "count": 11811,
+      "mean_predicted": 0.010748,
+      "observed_fraud_rate": 0.013631
+    },
+    {
+      "bin": 8,
+      "count": 11811,
+      "mean_predicted": 0.018801,
+      "observed_fraud_rate": 0.021505
+    },
+    {
+      "bin": 9,
+      "count": 11811,
+      "mean_predicted": 0.0426,
+      "observed_fraud_rate": 0.039201
+    },
+    {
+      "bin": 10,
+      "count": 11811,
+      "mean_predicted": 0.256343,
+      "observed_fraud_rate": 0.236898
+    }
+  ],
+  "top_feature_importance": [
+    {
+      "feature": "card1",
+      "gain": 2667984.938594818,
+      "gain_share": 0.3477
+    },
+    {
+      "feature": "V258",
+      "gain": 721986.7504882812,
+      "gain_share": 0.0941
+    },
+    {
+      "feature": "card2",
+      "gain": 566313.5515975952,
+      "gain_share": 0.0738
+    },
+    {
+      "feature": "addr1",
+      "gain": 432820.16498947144,
+      "gain_share": 0.0564
+    },
+    {
+      "feature": "V70",
+      "gain": 416120.811920166,
+      "gain_share": 0.0542
+    },
+    {
+      "feature": "C14",
+      "gain": 301885.4550933838,
+      "gain_share": 0.0393
+    },
+    {
+      "feature": "V317",
+      "gain": 232912.61309814453,
+      "gain_share": 0.0304
+    },
+    {
+      "feature": "DeviceInfo",
+      "gain": 198896.50009155273,
+      "gain_share": 0.0259
+    },
+    {
+      "feature": "D2",
+      "gain": 151602.11491394043,
+      "gain_share": 0.0198
+    },
+    {
+      "feature": "V91",
+      "gain": 128317.43835449219,
+      "gain_share": 0.0167
+    },
+    {
+      "feature": "C8",
+      "gain": 127960.26555633545,
+      "gain_share": 0.0167
+    },
+    {
+      "feature": "card1_count",
+      "gain": 127538.98207092285,
+      "gain_share": 0.0166
+    },
+    {
+      "feature": "C1",
+      "gain": 103044.26927185059,
+      "gain_share": 0.0134
+    },
+    {
+      "feature": "P_emaildomain",
+      "gain": 93578.8376197815,
+      "gain_share": 0.0122
+    },
+    {
+      "feature": "day_index",
+      "gain": 92948.10752868652,
+      "gain_share": 0.0121
+    }
+  ],
+  "example_rows": [
+    {
+      "example_id": "HOLDOUT-01",
+      "amount_log": 5.17,
+      "product_code": "R",
+      "calibrated_score": 1.0,
+      "true_label": 1
+    },
+    {
+      "example_id": "HOLDOUT-02",
+      "amount_log": 3.289,
+      "product_code": "C",
+      "calibrated_score": 0.051873,
+      "true_label": 0
+    },
+    {
+      "example_id": "HOLDOUT-03",
+      "amount_log": 3.807,
+      "product_code": "W",
+      "calibrated_score": 0.02164,
+      "true_label": 0
+    },
+    {
+      "example_id": "HOLDOUT-04",
+      "amount_log": 6.786,
+      "product_code": "W",
+      "calibrated_score": 0.010185,
+      "true_label": 1
+    },
+    {
+      "example_id": "HOLDOUT-05",
+      "amount_log": 4.7,
+      "product_code": "W",
+      "calibrated_score": 0.007243,
+      "true_label": 0
+    },
+    {
+      "example_id": "HOLDOUT-06",
+      "amount_log": 4.007,
+      "product_code": "W",
+      "calibrated_score": 0.002618,
+      "true_label": 0
+    },
+    {
+      "example_id": "HOLDOUT-07",
+      "amount_log": 4.5,
+      "product_code": "W",
+      "calibrated_score": 0.002122,
+      "true_label": 0
+    },
+    {
+      "example_id": "HOLDOUT-08",
+      "amount_log": 5.817,
+      "product_code": "W",
+      "calibrated_score": 0.001706,
+      "true_label": 0
+    },
+    {
+      "example_id": "HOLDOUT-09",
+      "amount_log": 3.932,
+      "product_code": "S",
+      "calibrated_score": 0.000552,
+      "true_label": 0
+    },
+    {
+      "example_id": "HOLDOUT-10",
+      "amount_log": 3.401,
+      "product_code": "W",
+      "calibrated_score": 0.0,
+      "true_label": 0
+    }
+  ]
+}

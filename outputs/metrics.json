@@ -1,0 +1,177 @@
+{
+  "holdout_n": 118108,
+  "holdout_fraud_count": 4064,
+  "holdout_fraud_rate": 0.034409,
+  "roc_auc": 0.8935432901709163,
+  "pr_auc": 0.5070429412996057,
+  "brier_score": 0.022254943076573455,
+  "review_queue": [
+    {
+      "top_fraction": 0.005,
+      "n_reviewed": 591,
+      "true_positives": 543,
+      "precision": 0.9188,
+      "recall": 0.1336
+    },
+    {
+      "top_fraction": 0.01,
+      "n_reviewed": 1181,
+      "true_positives": 1047,
+      "precision": 0.8865,
+      "recall": 0.2576
+    },
+    {
+      "top_fraction": 0.02,
+      "n_reviewed": 2362,
+      "true_positives": 1663,
+      "precision": 0.7041,
+      "recall": 0.4092
+    },
+    {
+      "top_fraction": 0.05,
+      "n_reviewed": 5905,
+      "true_positives": 2306,
+      "precision": 0.3905,
+      "recall": 0.5674
+    }
+  ],
+  "calibration_table": [
+    {
+      "bin": 1,
+      "count": 11810,
+      "mean_predicted": 0.000266,
+      "observed_fraud_rate": 0.001778
+    },
+    {
+      "bin": 2,
+      "count": 11811,
+      "mean_predicted": 0.001242,
+      "observed_fraud_rate": 0.001947
+    },
+    {
+      "bin": 3,
+      "count": 11811,
+      "mean_predicted": 0.001781,
+      "observed_fraud_rate": 0.003895
+    },
+    {
+      "bin": 4,
+      "count": 11811,
+      "mean_predicted": 0.002241,
+      "observed_fraud_rate": 0.006435
+    },
+    {
+      "bin": 5,
+      "count": 11811,
+      "mean_predicted": 0.00274,
+      "observed_fraud_rate": 0.007705
+    },
+    {
+      "bin": 6,
+      "count": 11810,
+      "mean_predicted": 0.00662,
+      "observed_fraud_rate": 0.011092
+    },
+    {
+      "bin": 7,
+      "count": 11811,
+      "mean_predicted": 0.010748,
+      "observed_fraud_rate": 0.013631
+    },
+    {
+      "bin": 8,
+      "count": 11811,
+      "mean_predicted": 0.018801,
+      "observed_fraud_rate": 0.021505
+    },
+    {
+      "bin": 9,
+      "count": 11811,
+      "mean_predicted": 0.0426,
+      "observed_fraud_rate": 0.039201
+    },
+    {
+      "bin": 10,
+      "count": 11811,
+      "mean_predicted": 0.256343,
+      "observed_fraud_rate": 0.236898
+    }
+  ],
+  "top_feature_importance": [
+    {
+      "feature": "card1",
+      "gain": 2667984.938594818,
+      "gain_share": 0.3477
+    },
+    {
+      "feature": "V258",
+      "gain": 721986.7504882812,
+      "gain_share": 0.0941
+    },
+    {
+      "feature": "card2",
+      "gain": 566313.5515975952,
+      "gain_share": 0.0738
+    },
+    {
+      "feature": "addr1",
+      "gain": 432820.16498947144,
+      "gain_share": 0.0564
+    },
+    {
+      "feature": "V70",
+      "gain": 416120.811920166,
+      "gain_share": 0.0542
+    },
+    {
+      "feature": "C14",
+      "gain": 301885.4550933838,
+      "gain_share": 0.0393
+    },
+    {
+      "feature": "V317",
+      "gain": 232912.61309814453,
+      "gain_share": 0.0304
+    },
+    {
+      "feature": "DeviceInfo",
+      "gain": 198896.50009155273,
+      "gain_share": 0.0259
+    },
+    {
+      "feature": "D2",
+      "gain": 151602.11491394043,
+      "gain_share": 0.0198
+    },
+    {
+      "feature": "V91",
+      "gain": 128317.43835449219,
+      "gain_share": 0.0167
+    },
+    {
+      "feature": "C8",
+      "gain": 127960.26555633545,
+      "gain_share": 0.0167
+    },
+    {
+      "feature": "card1_count",
+      "gain": 127538.98207092285,
+      "gain_share": 0.0166
+    },
+    {
+      "feature": "C1",
+      "gain": 103044.26927185059,
+      "gain_share": 0.0134
+    },
+    {
+      "feature": "P_emaildomain",
+      "gain": 93578.8376197815,
+      "gain_share": 0.0122
+    },
+    {
+      "feature": "day_index",
+      "gain": 92948.10752868652,
+      "gain_share": 0.0121
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "train_rows": 590540,
+  "test_rows": 506691,
+  "train_columns": 434,
+  "test_columns": 433,
+  "train_rows_with_identity": 144233,
+  "test_rows_with_identity": null,
+  "train_fraud_rate": 0.03499,
+  "train_fraud_count": 20663,
+  "train_transaction_dt_min": 86400,
+  "train_transaction_dt_max": 15811131,
+  "test_transaction_dt_min": 18403224,
+  "test_transaction_dt_max": 34214345,
+  "test_has_isfraud_column": false,
+  "missing_rates_by_group_train": {
+    "other": {
+      "n_columns": 5,
+      "mean_missing_rate": 0.0,
+      "min_missing_rate": 0.0,
+      "max_missing_rate": 0.0
+    },
+    "card": {
+      "n_columns": 6,
+      "mean_missing_rate": 0.0051,
+      "min_missing_rate": 0.0,
+      "max_missing_rate": 0.0151
+    },
+    "addr": {
+      "n_columns": 2,
+      "mean_missing_rate": 0.1113,
+      "min_missing_rate": 0.1113,
+      "max_missing_rate": 0.1113
+    },
+    "dist": {
+      "n_columns": 2,
+      "mean_missing_rate": 0.7664,
+      "min_missing_rate": 0.5965,
+      "max_missing_rate": 0.9363
+    },
+    "email": {
+      "n_columns": 2,
+      "mean_missing_rate": 0.4637,
+      "min_missing_rate": 0.1599,
+      "max_missing_rate": 0.7675
+    },
+    "C": {
+      "n_columns": 14,
+      "mean_missing_rate": 0.0,
+      "min_missing_rate": 0.0,
+      "max_missing_rate": 0.0
+    },
+    "D": {
+      "n_columns": 15,
+      "mean_missing_rate": 0.5815,
+      "min_missing_rate": 0.0021,
+      "max_missing_rate": 0.9341
+    },
+    "M": {
+      "n_columns": 9,
+      "mean_missing_rate": 0.4992,
+      "min_missing_rate": 0.2868,
+      "max_missing_rate": 0.5935
+    },
+    "V": {
+      "n_columns": 339,
+      "mean_missing_rate": 0.4304,
+      "min_missing_rate": 0.0,
+      "max_missing_rate": 0.8612
+    },
+    "identity": {
+      "n_columns": 38,
+      "mean_missing_rate": 0.8482,
+      "min_missing_rate": 0.7558,
+      "max_missing_rate": 0.992
+    },
+    "device": {
+      "n_columns": 2,
+      "mean_missing_rate": 0.7803,
+      "min_missing_rate": 0.7616,
+      "max_missing_rate": 0.7991
+    }
+  }
+}

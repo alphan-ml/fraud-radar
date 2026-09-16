@@ -1,0 +1,48 @@
+{
+  "zip_sha256": "4cc646da09d0a9b265983ffed775b1f9ee15af5266586df610e04d6adae0b829",
+  "zip_bytes": 123856947,
+  "csv_shas": {
+    "train_transaction.csv": {
+      "sha256": "3a5c83ab6b3cc13dcabe5ffa9f522307fd5f7f7b6e6f6a60c32284ca6283d642",
+      "bytes": 683351067
+    },
+    "train_identity.csv": {
+      "sha256": "b63c725d8377be90a995268d97f347c17d456b95db45807adcf9f59cd603c37c",
+      "bytes": 26529680
+    },
+    "test_transaction.csv": {
+      "sha256": "2a8e51f1d335a86025d2b7f45beb9b78d0ab1edd726ef531d8b71a8a0065c011",
+      "bytes": 613194934
+    },
+    "test_identity.csv": {
+      "sha256": "3e5978cb13ca5e72f52babc4349ae0125e14b87ca8bfabe952ab67bb4ff1e10b",
+      "bytes": 25797161
+    },
+    "sample_submission.csv": {
+      "sha256": "50d7e0d6fcfc6e498efc297001f252101512ccdcb34aefbde6db98f8242a3626",
+      "bytes": 6080314
+    }
+  },
+  "row_counts": {
+    "train_transaction.csv": 590540,
+    "train_identity.csv": 144233,
+    "test_transaction.csv": 506691,
+    "test_identity.csv": 141907,
+    "sample_submission.csv": 506691
+  },
+  "column_counts": {
+    "train_transaction.csv": 394,
+    "train_identity.csv": 41,
+    "test_transaction.csv": 393,
+    "test_identity.csv": 41,
+    "sample_submission.csv": 2
+  },
+  "row_count_mismatches_vs_expected": {},
+  "train_transaction_rows": 590540,
+  "train_fraud_count": 20663,
+  "train_fraud_rate": 0.03499,
+  "train_transaction_dt_min": 86400,
+  "train_transaction_dt_max": 15811131,
+  "train_transactions_with_identity_row": 144233,
+  "train_transactions_with_identity_row_pct": 24.424
+}
