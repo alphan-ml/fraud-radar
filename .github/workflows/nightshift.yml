@@ -1,0 +1,37 @@
+name: nightshift
+# Runs Claude Code inside GitHub Actions. Trigger: an issue labeled `night`, or a comment with @claude.
+# Requires secret ANTHROPIC_API_KEY. Verify the action's current inputs at github.com/anthropics/claude-code-action before first use.
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+jobs:
+  run:
+    if: >
+      (github.event_name == 'issues' && github.event.label.name == 'night') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Identity and hygiene rules
+        run: |
+          git config user.name "Alpha N"
+          git config user.email "45754668+alphan-ml@users.noreply.github.com"
+          git config commit.gpgsign false
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          label_trigger: night
+          trigger_phrase: "@claude"
+          # Rules live in CLAUDE.md at the repo root. Claude Code reads it as project instructions.
