@@ -1,7 +1,8 @@
 import json
 import subprocess
 
-rows = json.load(open("aws-lambda/verification_rows.json"))
+with open("aws-lambda/verification_rows.json") as f:
+    rows = json.load(f)
 max_abs_diff = 0.0
 mismatches = []
 for r in rows:
@@ -24,7 +25,8 @@ for r in rows:
         check=True,
         capture_output=True,
     )
-    out = json.load(open("/tmp/invoke_out.json"))
+    with open("/tmp/invoke_out.json") as f:
+        out = json.load(f)
     body = json.loads(out["body"])
     diff = abs(body["calibrated_probability"] - r["local_calibrated_probability"])
     max_abs_diff = max(max_abs_diff, diff)
@@ -59,5 +61,6 @@ subprocess.run(
     check=True,
     capture_output=True,
 )
-out = json.load(open("/tmp/invoke_out.json"))
+with open("/tmp/invoke_out.json") as f:
+    out = json.load(f)
 print("SAMPLE_RESPONSE", out["body"])
