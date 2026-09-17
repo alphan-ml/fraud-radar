@@ -30,10 +30,19 @@ jobs:
           git config user.email "45754668+alphan-ml@users.noreply.github.com"
           git config commit.gpgsign false
       - uses: anthropics/claude-code-action@v1
+        # Unattended run: no one can answer an approval prompt, so the shell, editor and
+        # Python tools are allowed up front. The data secrets must be exported here; a repo
+        # secret is not an environment variable until a workflow passes it on.
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           label_trigger: night
           trigger_phrase: "@claude"
-          # Pinned 2026-09-17: the action's default (a 1M-context Opus) failed at once on this key's tier.
-          claude_args: "--model claude-sonnet-5"
+          # Model pinned 2026-09-17 (the action's default failed on this account).
+          claude_args: >-
+            --model claude-sonnet-5
+            --allowedTools "Bash,Edit,Write,MultiEdit,NotebookEdit,Read,Glob,Grep,LS,WebFetch"
           # Rules live in CLAUDE.md at the repo root. Claude Code reads it as project instructions.
