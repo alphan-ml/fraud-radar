@@ -36,4 +36,5 @@ jobs:
           trigger_phrase: "@claude"
           # Pinned 2026-09-17: the action's default (a 1M-context Opus) failed at once on this key's tier.
           claude_args: "--model claude-sonnet-5"
+          show_full_output: true   # temporary, to read the first-call error
           # Rules live in CLAUDE.md at the repo root. Claude Code reads it as project instructions.
