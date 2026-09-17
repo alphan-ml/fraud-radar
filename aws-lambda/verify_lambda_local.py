@@ -1,7 +1,6 @@
 import importlib.util
 import json
 import shutil
-import sys
 
 spec = importlib.util.spec_from_file_location("lambda_function", "aws-lambda/lambda_function.py")
 lf = importlib.util.module_from_spec(spec)
@@ -9,6 +8,7 @@ spec.loader.exec_module(lf)
 
 # stage assets at the /tmp paths _load_models expects, skipping S3
 import os
+
 os.makedirs("/tmp", exist_ok=True)
 for fname, src in [
     ("lgb_model.txt", "outputs/checkpoints/lgb_model.txt"),
@@ -19,7 +19,8 @@ for fname, src in [
 ]:
     shutil.copy(src, f"/tmp/{fname}")
 
-rows = json.load(open("aws-lambda/verification_rows.json"))
+with open("aws-lambda/verification_rows.json") as f:
+    rows = json.load(f)
 
 max_abs_diff = 0.0
 mismatches = []

@@ -27,8 +27,8 @@ import math
 import os
 
 import boto3
-import numpy as np
 import lightgbm as lgb
+import numpy as np
 
 S3_BUCKET = os.environ.get("MODEL_BUCKET", "giggit-fraud-radar-models")
 MODEL_PREFIX = os.environ.get("MODEL_PREFIX", "models")
@@ -77,9 +77,12 @@ def _load_models() -> None:
             s3.download_file(S3_BUCKET, f"{MODEL_PREFIX}/{fname}", local_path)
 
     _booster = lgb.Booster(model_file="/tmp/lgb_model.txt")
-    _feature_cols = json.loads(open("/tmp/feature_columns.json").read())
-    _cat_code_maps = json.loads(open("/tmp/cat_code_maps.json").read())
-    iso = json.loads(open("/tmp/isotonic_thresholds.json").read())
+    with open("/tmp/feature_columns.json") as f:
+        _feature_cols = json.loads(f.read())
+    with open("/tmp/cat_code_maps.json") as f:
+        _cat_code_maps = json.loads(f.read())
+    with open("/tmp/isotonic_thresholds.json") as f:
+        iso = json.loads(f.read())
     _iso_X_thresholds = np.array(iso["X_thresholds"], dtype="float64")
     _iso_y_thresholds = np.array(iso["y_thresholds"], dtype="float64")
     _iso_X_min = float(iso["X_min"])
@@ -130,11 +133,11 @@ def build_features_row(transaction: dict) -> np.ndarray:
     for col in _feature_cols:
         if col in values:
             continue
-        if col.startswith("V") and col[1:].isdigit():
-            values[col] = _num(transaction, col)
-        elif col.startswith("C") and col[1:].isdigit():
-            values[col] = _num(transaction, col)
-        elif col.startswith("D") and col[1:].isdigit():
+        if (
+            (col.startswith("V") and col[1:].isdigit())
+            or (col.startswith("C") and col[1:].isdigit())
+            or (col.startswith("D") and col[1:].isdigit())
+        ):
             values[col] = _num(transaction, col)
         elif col in M_BINARY_COLS:
             v = transaction.get(col)
