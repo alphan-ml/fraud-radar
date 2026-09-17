@@ -57,8 +57,19 @@ for i, r in enumerate(rows[:10]):
         "calibrated_probability": r["local_calibrated_probability"],
         "review_flag": r["local_review_flag"],
     })
+def _nan_to_none(obj):
+    """examples.json is served to browsers as-is; NaN is not valid JSON."""
+    if isinstance(obj, float) and (obj != obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _nan_to_none(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_nan_to_none(v) for v in obj]
+    return obj
+
+
 with open("aws-lambda/examples.json", "w") as f:
-    json.dump(examples, f, allow_nan=True)
+    json.dump(_nan_to_none(examples), f, allow_nan=False)
 
 print("wrote", len(rows), "verification rows and", len(examples), "examples")
 print("sample scores:", [(r["transaction_id"], r["local_calibrated_probability"]) for r in rows[:5]])
