@@ -1,0 +1,61 @@
+name: deploy-lambda
+# Handler-only deploy of the scoring endpoint, on merge to main.
+#
+# What it does: downloads the live dependency package (lambda-code/deploy.zip
+# in the model bucket), swaps in this repo's handler files from aws-lambda/,
+# uploads the new zip, points the Lambda at it, waits, then curls /health.
+#
+# What it does NOT do: rebuild the dependency layer (numpy, scipy, lightgbm,
+# libgomp). That is a one-time Mac step documented in README "Live scoring
+# API". A dependency change still needs that step, then this workflow.
+#
+# Auth: OIDC, no AWS keys stored anywhere. One-time owner setup: an IAM role
+# that trusts GitHub OIDC for repo alphan-ml/<name>, branch main, with
+# lambda:UpdateFunctionCode + lambda:GetFunction on the function and
+# s3:GetObject + s3:PutObject on lambda-code/* in the bucket. Store its ARN
+# as repo secret AWS_ROLE_ARN.
+#
+# Install: copy to .github/workflows/deploy-lambda.yml in the product repo and
+# edit the four values under `env:` for that repo.
+on:
+  push:
+    branches: [main]
+    paths: ["aws-lambda/**", ".github/workflows/deploy-lambda.yml"]
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+env:
+  FUNCTION_NAME: fraud-score-transaction
+  MODEL_BUCKET: giggit-fraud-radar-models
+  API_URL: https://r3skxlusm4.execute-api.us-east-1.amazonaws.com
+  HANDLER_FILES: "lambda_function.py cat_code_maps.json examples.json feature_columns.json isotonic_thresholds.json"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency: deploy-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Get the live dependency package
+        run: aws s3 cp "s3://$MODEL_BUCKET/lambda-code/deploy.zip" deploy.zip --no-progress
+      - name: Swap in this commit's handler files
+        run: |
+          set -e
+          for f in $HANDLER_FILES; do test -f "aws-lambda/$f" || { echo "missing aws-lambda/$f"; exit 1; }; done
+          (cd aws-lambda && zip -q ../deploy.zip $HANDLER_FILES)
+          unzip -l deploy.zip | grep -E "$(echo $HANDLER_FILES | sed 's/ /|/g')"
+      - name: Upload and point the Lambda at it
+        run: |
+          set -e
+          aws s3 cp deploy.zip "s3://$MODEL_BUCKET/lambda-code/deploy.zip" --no-progress
+          aws lambda update-function-code --function-name "$FUNCTION_NAME" \
+            --s3-bucket "$MODEL_BUCKET" --s3-key lambda-code/deploy.zip --output text --query 'LastModified'
+          aws lambda wait function-updated --function-name "$FUNCTION_NAME"
+      - name: Smoke test
+        run: |
+          sleep 5
+          curl -sf --retry 3 --retry-delay 5 "$API_URL/health"
