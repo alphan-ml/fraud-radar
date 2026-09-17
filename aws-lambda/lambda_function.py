@@ -198,6 +198,22 @@ _HEADERS = {
 _ALLOWED_ORIGINS = {"https://www.giggitai.com", "https://giggitai.com"}
 
 
+def _nan_to_none(obj):
+    """Replaces float NaN/inf with None, recursively. Python's json.dumps
+    writes NaN as the bare token `NaN`, which is not JSON: a browser's
+    JSON.parse rejects the whole body. That is what broke the site's
+    "Score a Transaction" example picker (/examples carried 1,294 NaN
+    values from the raw holdout rows). The scoring path already treats
+    None as missing, so null round-trips through POST /score unchanged."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _nan_to_none(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_nan_to_none(v) for v in obj]
+    return obj
+
+
 def _resp(status: int, body, origin: str | None = None) -> dict:
     headers = dict(_HEADERS)
     if origin in _ALLOWED_ORIGINS:
@@ -205,7 +221,7 @@ def _resp(status: int, body, origin: str | None = None) -> dict:
     return {
         "statusCode": status,
         "headers": headers,
-        "body": body if isinstance(body, str) else json.dumps(body),
+        "body": body if isinstance(body, str) else json.dumps(_nan_to_none(body), allow_nan=False),
     }
 
 
