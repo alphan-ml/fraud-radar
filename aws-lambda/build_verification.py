@@ -1,4 +1,5 @@
 import json
+import math
 import sys
 
 import numpy as np
@@ -59,7 +60,7 @@ for i, r in enumerate(rows[:10]):
     })
 def _nan_to_none(obj):
     """examples.json is served to browsers as-is; NaN is not valid JSON."""
-    if isinstance(obj, float) and (obj != obj):
+    if isinstance(obj, float) and math.isnan(obj):
         return None
     if isinstance(obj, dict):
         return {k: _nan_to_none(v) for k, v in obj.items()}
