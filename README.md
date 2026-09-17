@@ -18,17 +18,22 @@ to 1/0, `card1-6`/`addr1-2`/`P_emaildomain`/`R_emaildomain`/`ProductCD`/
 `DeviceType`/`DeviceInfo`/`M4` kept as LightGBM native categoricals (no
 one-hot), `TransactionAmt` log1p-transformed, hour-of-day and day-index
 derived from `TransactionDT`, and count encodings for `card1`, `addr1`,
-`P_emaildomain` computed independently of `isFraud`. `model.py` sorts every
-labeled row by `TransactionDT` ascending, takes the last 20% as a holdout
-untouched by training, early stopping, or calibration, and inside the
-remaining 80% pool takes the last 10% (also time-ordered) as an
-early-stopping / calibration validation slice. LightGBM trains on the first
-90% of the pool with `scale_pos_weight` set to the train slice's
-negative/positive ratio; isotonic regression is then fit on the validation
-slice's raw scores vs. true labels to produce calibrated probabilities.
-`eval.py` scores the untouched holdout only. `score.py` is the serving path:
-it loads the saved booster and calibrator once and turns one raw transaction
-dict into a calibrated probability and a review flag.
+`P_emaildomain` computed independently of `isFraud` -- via frequency maps
+(`build_features(df, freq_maps=...)`) fit on a training slice and reused
+as-is at evaluation and serving time, not recomputed on whatever frame is
+at hand (see "Design decisions" below). `model.py` sorts every labeled row
+by `TransactionDT` ascending, takes the last 20% as a holdout untouched by
+training, early stopping, or calibration, and inside the remaining 80%
+pool takes the last 10% (also time-ordered) as an early-stopping /
+calibration validation slice. LightGBM trains on the first 90% of the pool
+with `scale_pos_weight` set to the train slice's negative/positive ratio;
+isotonic regression is then fit on the validation slice's raw scores vs.
+true labels to produce calibrated probabilities, and a review-queue score
+cutoff is fit separately on that same validation slice (see "Design
+decisions"). `eval.py` scores the untouched holdout only. `score.py` is the
+serving path: it loads the saved booster, calibrator, frequency maps, and
+review-policy cutoff once, and turns one raw transaction dict into a
+calibrated probability and a review flag.
 
 ## How to run
 
@@ -36,9 +41,14 @@ dict into a calibrated probability and a review flag.
 git clone <this repo> && cd fraud-radar
 uv venv --python 3.11 && source .venv/bin/activate
 uv pip install -e ".[dev]"
-# data/raw/ieee-fraud-detection.zip must already be present -- the Kaggle
-# competition requires an authenticated, rules-accepted account, so this
-# repo does not call the Kaggle API itself.
+
+# fetch: download the competition zip with an authenticated, rules-accepted
+# Kaggle account (KAGGLE_USERNAME / KAGGLE_KEY env vars or secrets) --
+# `fetch.py` itself only unzips and verifies data/raw/ieee-fraud-detection.zip,
+# it does not call the Kaggle API.
+pip install kaggle
+kaggle competitions download -c ieee-fraud-detection -p data/raw
+
 python3 -m fraud_radar.cli all      # fetch -> check -> clean -> features -> train -> eval -> export
 python3 -m pytest -q
 python3 -m ruff check .
@@ -61,8 +71,12 @@ result = scorer.score_one({
 # {"calibrated_probability": 0.0123, "review_flag": False}
 ```
 
-`review_flag` defaults to the 2%-review-queue operating point (score >=
-0.02), which on the real holdout catches 40.9% of fraud at 70.4% precision
+`review_flag` defaults to the *fitted* review-queue cutoff -- the calibrated
+score at the 98th percentile of the validation slice
+(`outputs/checkpoints/review_policy.json`, `fitted_cutoff`), a probability
+threshold picked to realize a 2% review rate, not a fixed probability
+constant (see "Design decisions" below). On the real holdout this cutoff
+realizes a 1.65% review rate, catching 38.5% of fraud at 80.1% precision
 (see Results below) -- pass `review_threshold=` to `FraudScorer.load()` to
 use a different operating point.
 
@@ -98,6 +112,33 @@ use a different operating point.
    `scale_pos_weight` (27.45 for this run, `n_neg/n_pos` on the train
    slice) reweights the loss instead of discarding or synthesizing rows,
    which keeps every real negative example in the model's view.
+6. **Count-encoding frequency maps fit on the train slice only, saved, and
+   reused everywhere.** `build_features()`'s `card1_count`/`addr1_count`/
+   `P_emaildomain_count` used to be `value_counts()` on whatever frame the
+   function was given -- the full 590,540-row population before the time
+   split during training, but a single row at serving time, so every
+   served count came out `1.0` regardless of the actual value. The maps
+   are now fit once, on the training slice only (`fraud_radar.features.
+   fit_freq_maps`), saved to `outputs/checkpoints/freq_maps.json`, and
+   applied identically (`apply_freq_maps`) to the validation slice, the
+   holdout, and every served transaction -- a value never seen in the
+   training slice maps to `0`. `tests/test_model.py` proves the maps are
+   fit on the train slice only; `tests/test_score.py` proves a row scores
+   identically alone or inside a batch.
+7. **The review-queue cutoff is fit, not a fixed probability.** The
+   previous default, `DEFAULT_REVIEW_THRESHOLD = 0.02`, flagged
+   `calibrated_probability >= 0.02` and was documented as "the
+   2%-review-queue operating point" -- but a fixed probability and a fixed
+   review-queue *rate* are different quantities that happen to have
+   coincided for one particular model. The cutoff is now fit on the
+   validation slice as the calibrated score at the 98th percentile
+   (`REVIEW_TOP_FRACTION = 0.02` in `model.py`), saved to
+   `outputs/checkpoints/review_policy.json`
+   (`top_fraction`/`fitted_cutoff`/`fitted_on`/`n_validation`), and used as
+   `score.py`'s default -- it will differ from `0.02` and from run to run
+   as the model changes. The realized review rate/precision/recall at this
+   cutoff, measured on the untouched holdout, is in
+   `outputs/metrics.json`'s `review_policy` block (see Results below).
 
 ## Data provenance
 
@@ -117,21 +158,30 @@ hashes for all five extracted CSVs: `outputs/data_quality.json`.
 
 | Metric | Value |
 |---|---|
-| ROC-AUC | 0.8935 |
-| PR-AUC | 0.5070 |
-| Brier score | 0.02225 |
+| ROC-AUC | 0.8932 |
+| PR-AUC | 0.5256 |
+| Brier score | 0.02152 |
 
 Review-queue precision/recall at fixed review rates:
 
 | Review rate | Transactions reviewed | True positives caught | Precision | Recall |
 |---|---|---|---|---|
-| 0.5% | 591 | 543 | 0.9188 | 0.1336 |
-| 1% | 1,181 | 1,047 | 0.8865 | 0.2576 |
-| 2% | 2,362 | 1,663 | 0.7041 | 0.4092 |
-| 5% | 5,905 | 2,306 | 0.3905 | 0.5674 |
+| 0.5% | 591 | 544 | 0.9205 | 0.1339 |
+| 1% | 1,181 | 1,064 | 0.9009 | 0.2618 |
+| 2% | 2,362 | 1,725 | 0.7303 | 0.4245 |
+| 5% | 5,905 | 2,365 | 0.4005 | 0.5819 |
 
-Top-5 features by LightGBM total gain: `card1` (34.77% of gain), `V258`
-(9.41%), `card2` (7.38%), `addr1` (5.64%), `V70` (5.42%). Full top-15 table,
+Fitted review policy (`outputs/checkpoints/review_policy.json`, see "Design
+decisions"): a `fitted_cutoff` of `0.571429`, fit as the calibrated score at
+the 98th percentile of the 47,243-row validation slice. Realized on the
+holdout, this cutoff reviews 1.65% of transactions (1,954), at 80.14%
+precision and 38.53% recall -- close to, but not identical to, the fixed-2%
+row above, because the fitted cutoff is a probability threshold, not a rank
+threshold, and the holdout's score distribution is not perfectly identical
+to validation's.
+
+Top-5 features by LightGBM total gain: `card1` (35.02% of gain), `V258`
+(8.12%), `card2` (7.11%), `addr1` (6.26%), `V70` (4.63%). Full top-15 table,
 the 10-bin calibration table, and the calibrated review-queue table above
 are all in `outputs/metrics.json` and `outputs/site_data.json` -- written by
 `fraud-radar eval` / `fraud-radar export`, never typed by hand.
@@ -158,14 +208,15 @@ invokes).
 
 - **S3** `giggit-fraud-radar-models` (versioned) -- `models/lgb_model.txt`,
   `models/feature_columns.json`, `models/cat_code_maps.json`,
-  `models/isotonic_thresholds.json`, `models/examples.json`;
-  `lambda-code/deploy.zip`.
+  `models/isotonic_thresholds.json`, `models/count_maps.json`,
+  `models/review_policy.json`, `models/examples.json`; `lambda-code/deploy.zip`.
 - **IAM role** `fraud-lambda-execution-role` -- `AWSLambdaBasicExecutionRole`
   plus an inline policy granting `s3:GetObject` on
   `giggit-fraud-radar-models/models/*` only.
 - **Lambda** `fraud-score-transaction` -- Python 3.11, **arm64**, 1024 MB,
-  30 s timeout. Downloads the booster, category-code maps, and isotonic
-  thresholds from S3 into `/tmp` on cold start, then serves from memory.
+  30 s timeout. Downloads the booster, category-code maps, count-encoding
+  frequency maps, the review-policy cutoff, and isotonic thresholds from S3
+  into `/tmp` on cold start, then serves from memory.
   Bundled dependencies: numpy, a hand-trimmed scipy (scipy.sparse's own
   import chain only -- stats/optimize/spatial/io/signal/interpolate/
   integrate/ndimage/cluster/fftpack/odr/differentiate/datasets/misc
@@ -196,14 +247,15 @@ pure numpy:
   recomputed, so encoding is byte-identical by construction.
   `aws-lambda/cat_code_maps.json`.
 - **Count-encoded columns** (`card1_count`, `addr1_count`,
-  `P_emaildomain_count`): `build_features()` calls
-  `df[c].value_counts(dropna=False)` on whatever DataFrame it is given.
-  At serving time that DataFrame is always exactly one row, so every
-  count-encoded column comes out as **1.0** for every single-transaction
-  score in the real, unmodified `score.py` -- not the full-population
-  frequency. Reproduced exactly (hard-coded `1.0`), not "fixed", to match
-  `score.py`'s actual behavior. Worth knowing if this model is ever
-  batch-scored differently.
+  `P_emaildomain_count`): looked up from `aws-lambda/count_maps.json` (the
+  same `outputs/checkpoints/freq_maps.json` fit on the training slice by
+  `fraud_radar.model.train()`), downloaded from S3 like the other assets.
+  A value not present in the map -- unseen in the training slice, or a
+  missing field -- looks up 0, matching
+  `fraud_radar.features.apply_freq_maps()` exactly. (Previously these were
+  hard-coded to `1.0` to match a `score.py` bug where the map was
+  recomputed on whatever frame was at hand -- a single row at serving
+  time. Fixed in both places together; see README "Design decisions".)
 - **Isotonic calibration**: `outputs/checkpoints/calibrator.joblib`'s
   106 sorted `(X_thresholds_, y_thresholds_)` pairs were extracted once
   (`aws-lambda/isotonic_thresholds.json`) and are applied with
@@ -211,6 +263,10 @@ pure numpy:
   abs diff against `sklearn.isotonic.IsotonicRegression.predict` on 50
   random points, so no scikit-learn/scipy.interpolate dependency is
   needed for calibration.
+- **Review-queue cutoff**: read from `aws-lambda/review_policy.json`'s
+  `fitted_cutoff` (the same file `fraud_radar.model.train()` writes to
+  `outputs/checkpoints/review_policy.json`) and used as the handler's
+  default, instead of a hard-coded `0.02` probability.
 - **Float32 rounding**: `build_features()` casts every numeric feature to
   float32 before LightGBM sees it (`_data_from_pandas`'s dtype promotion
   lands on float32 for this feature set). The handler round-trips its
@@ -222,14 +278,25 @@ pure numpy:
 20 real transactions from the time-ordered 20% holdout
 (`outputs/checkpoints/split_idx.npz` -> `holdout_idx[:20]`,
 `data/clean/train.parquet`) were scored two ways: locally through the
-unmodified `FraudScorer.score_one()`, and live through the deployed
-Lambda (`aws lambda invoke`, then again through the public API Gateway
-URL). **Max abs diff on `calibrated_probability`: 0.0. All 20
-`review_flag` values matched.** Full rows (input + both scores):
-`aws-lambda/verification_rows.json`. Reproduce with
-`aws-lambda/build_verification.py` (builds the 20 rows + 10 examples)
-and `aws-lambda/test_invoke.py` (scores all 20 through the live Lambda
-and diffs).
+unmodified `FraudScorer.score_one()`, and through the pure-numpy Lambda
+handler with all assets staged locally
+(`aws-lambda/verify_lambda_local.py`, no S3/AWS calls). **Max abs diff on
+`calibrated_probability`: 0.0. All 20 `review_flag` values matched.** Full
+rows (input + local score): `aws-lambda/verification_rows.json`. Reproduce
+with `aws-lambda/build_verification.py` (builds the 20 rows + 10 examples,
+and regenerates `cat_code_maps.json`/`isotonic_thresholds.json`/
+`count_maps.json`/`review_policy.json`/`feature_columns.json` from the
+current `outputs/checkpoints/` model) then `aws-lambda/verify_lambda_local.py`.
+
+The 2026-09-16 deploy below verified the same way but against the *live*
+Lambda (`aws lambda invoke`, then the public API Gateway URL,
+`aws-lambda/test_invoke.py`) -- that verification predates this session's
+retrain (new `freq_maps.json`/`review_policy.json`, corrected count
+encoding), and the live endpoint still serves the previously deployed
+model/artifacts until the owner runs the deploy step with the new
+`outputs/checkpoints/` and uploads the new S3 assets (see "Do not" in the
+originating issue -- deploying is explicitly the owner's step, not
+automated here).
 
 ### Live curl proof
 

@@ -16,6 +16,7 @@ for fname, src in [
     ("cat_code_maps.json", "aws-lambda/cat_code_maps.json"),
     ("count_maps.json", "aws-lambda/count_maps.json"),
     ("isotonic_thresholds.json", "aws-lambda/isotonic_thresholds.json"),
+    ("review_policy.json", "aws-lambda/review_policy.json"),
 ]:
     shutil.copy(src, f"/tmp/{fname}")
 

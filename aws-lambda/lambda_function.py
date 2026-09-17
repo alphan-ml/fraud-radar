@@ -16,8 +16,13 @@ M4) come from the "pandas_categorical" section embedded in the trained
 model file itself -- the exact codes LightGBM used at training time, not
 recomputed -- so category encoding is byte-identical by construction.
 Count-encoding maps (card1_count, addr1_count, P_emaildomain_count) are
-precomputed from the full training population (independent of isFraud)
-and shipped as a static JSON asset.
+the same `outputs/checkpoints/freq_maps.json` fit on the training slice by
+`fraud_radar.model.train()` (count_maps.json here), downloaded from S3
+like the other artifacts -- not recomputed and not hard-coded, so a
+serving-time lookup for a value unseen in training slice comes out 0,
+matching `fraud_radar.features.apply_freq_maps`. The review-queue cutoff
+(review_policy.json, also from S3) is likewise the cutoff fit on the
+validation slice, not a hard-coded probability.
 """
 from __future__ import annotations
 
@@ -38,6 +43,8 @@ ASSET_FILES = [
     "feature_columns.json",
     "cat_code_maps.json",
     "isotonic_thresholds.json",
+    "count_maps.json",
+    "review_policy.json",
 ]
 
 M_BINARY_COLS = ["M1", "M2", "M3", "M5", "M6", "M7", "M8", "M9"]
@@ -54,8 +61,6 @@ ID_NUMERIC_COLS = [
 COUNT_ENCODE_COLS = ["card1", "addr1", "P_emaildomain"]
 REQUIRED_FIELDS = ["TransactionID", "TransactionDT", "TransactionAmt"]
 
-DEFAULT_REVIEW_THRESHOLD = 0.02
-
 _booster = None
 _feature_cols = None
 _cat_code_maps = None
@@ -63,11 +68,14 @@ _iso_X_thresholds = None
 _iso_y_thresholds = None
 _iso_X_min = None
 _iso_X_max = None
+_count_maps = None
+_review_threshold = None
 
 
 def _load_models() -> None:
     global _booster, _feature_cols, _cat_code_maps
     global _iso_X_thresholds, _iso_y_thresholds, _iso_X_min, _iso_X_max
+    global _count_maps, _review_threshold
     if _booster is not None:
         return
     s3 = boto3.client("s3")
@@ -87,6 +95,10 @@ def _load_models() -> None:
     _iso_y_thresholds = np.array(iso["y_thresholds"], dtype="float64")
     _iso_X_min = float(iso["X_min"])
     _iso_X_max = float(iso["X_max"])
+    with open("/tmp/count_maps.json") as f:
+        _count_maps = json.loads(f.read())
+    with open("/tmp/review_policy.json") as f:
+        _review_threshold = float(json.loads(f.read())["fitted_cutoff"])
 
 
 def _num(transaction: dict, key: str) -> float:
@@ -152,12 +164,10 @@ def build_features_row(transaction: dict) -> np.ndarray:
         elif col in ID_NUMERIC_COLS:
             values[col] = _num(transaction, col)
         elif col.endswith("_count") and col[: -len("_count")] in COUNT_ENCODE_COLS:
-            # fraud_radar.features.build_features() recomputes value_counts()
-            # on whichever dataframe it is given; at serving time that
-            # dataframe is always exactly one row, so every count-encoded
-            # column comes out as 1.0 for every single-transaction score --
-            # reproduced here exactly (verified against score.py, see README).
-            values[col] = 1.0
+            base_col = col[: -len("_count")]
+            v = transaction.get(base_col)
+            key = "nan" if v is None else str(v)
+            values[col] = float(_count_maps.get(base_col, {}).get(key, 0))
         else:
             values[col] = float("nan")
 
@@ -178,10 +188,12 @@ def predict_calibrated(row: np.ndarray) -> float:
     return calibrated
 
 
-def score_one(transaction: dict, review_threshold: float = DEFAULT_REVIEW_THRESHOLD) -> dict:
+def score_one(transaction: dict, review_threshold: float | None = None) -> dict:
     _load_models()
     row = build_features_row(transaction)
     proba = predict_calibrated(row)
+    if review_threshold is None:
+        review_threshold = _review_threshold
     return {
         "calibrated_probability": round(proba, 6),
         "review_flag": proba >= review_threshold,

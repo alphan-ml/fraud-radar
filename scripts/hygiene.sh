@@ -4,9 +4,10 @@ set -u
 fail=0
 say(){ echo "HYGIENE FAIL: $1"; fail=1; }
 # 1. Banned identity strings in files (case-insensitive), excluding this script and git internals
-# Excluded: aws-lambda/cat_code_maps.json -- the IEEE-CIS category map holds the email domain 'cableone.net', whose letters contain 'leon'
-if git grep -Iil -E 'leon|alto|adair' -- . ':!scripts/hygiene.sh' ':!.git' ':!aws-lambda/cat_code_maps.json' | grep -q .; then
-  git grep -Iil -E 'leon|alto|adair' -- . ':!scripts/hygiene.sh' ':!aws-lambda/cat_code_maps.json'; say "banned identity string in files"; fi
+# Excluded: aws-lambda/cat_code_maps.json and aws-lambda/count_maps.json -- both hold the real
+# IEEE-CIS email domain 'cableone.net', whose letters contain 'leon'
+if git grep -Iil -E 'leon|alto|adair' -- . ':!scripts/hygiene.sh' ':!.git' ':!aws-lambda/cat_code_maps.json' ':!aws-lambda/count_maps.json' | grep -q .; then
+  git grep -Iil -E 'leon|alto|adair' -- . ':!scripts/hygiene.sh' ':!aws-lambda/cat_code_maps.json' ':!aws-lambda/count_maps.json'; say "banned identity string in files"; fi
 # 2. Same in full history (commit messages and authors), plus assistant attribution patterns.
 #    Model ids such as claude-sonnet-5 are allowed in messages; attribution trailers are not.
 if git log --all --format='%an %ae %s %b' | grep -iqE 'leon|alto|adair|co-authored-by: claude|claude-session|claude\.ai/code|noreply@anthropic'; then say "banned string or Claude attribution in git history"; fi

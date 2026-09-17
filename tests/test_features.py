@@ -5,7 +5,7 @@ import math
 
 import pandas as pd
 
-from fraud_radar.features import build_features
+from fraud_radar.features import apply_freq_maps, build_features, fit_freq_maps
 
 
 def _row(**overrides):
@@ -64,3 +64,49 @@ def test_count_encoding_counts_repeats():
     assert feat.loc[0, "card1_count"] == 2.0
     assert feat.loc[1, "card1_count"] == 2.0
     assert feat.loc[2, "card1_count"] == 1.0
+
+
+def test_fit_freq_maps_fits_on_given_frame_only():
+    train_df = pd.DataFrame([
+        _row(TransactionID=1, card1=1001),
+        _row(TransactionID=2, card1=1001),
+        _row(TransactionID=3, card1=2002),
+    ])
+    train_feat = build_features(train_df)  # self-fit, only to get card1 as a category column
+    freq_maps = fit_freq_maps(train_feat, cols=["card1"])
+    assert freq_maps["card1"] == {"1001": 2, "2002": 1}
+
+
+def test_apply_freq_maps_uses_saved_counts_not_the_scored_frame():
+    train_df = pd.DataFrame([
+        _row(TransactionID=1, card1=1001),
+        _row(TransactionID=2, card1=1001),
+        _row(TransactionID=3, card1=2002),
+    ])
+    train_feat = build_features(train_df)
+    freq_maps = fit_freq_maps(train_feat, cols=["card1"])
+
+    # A single row scored alone must see the *training* count, not 1.0.
+    one_row = pd.DataFrame([_row(TransactionID=99, card1=1001)])
+    feat = build_features(one_row, freq_maps=freq_maps)
+    assert feat.loc[0, "card1_count"] == 2.0
+
+
+def test_unseen_key_maps_to_zero():
+    freq_maps = {"card1": {"1001": 2}}
+    df = pd.DataFrame([_row(TransactionID=1, card1=9999)])
+    feat = build_features(df, freq_maps=freq_maps)
+    assert feat.loc[0, "card1_count"] == 0.0
+    # addr1/P_emaildomain weren't fit at all -- also unseen, also 0.
+    assert feat.loc[0, "addr1_count"] == 0.0
+    assert feat.loc[0, "P_emaildomain_count"] == 0.0
+
+
+def test_apply_freq_maps_is_independent_of_frame_it_is_applied_to():
+    freq_maps = {"card1": {"1001": 7}}
+    small = pd.DataFrame({"card1": pd.Series([1001], dtype="category")})
+    big = pd.DataFrame({"card1": pd.Series([1001] * 50, dtype="category")})
+    small_out = apply_freq_maps(small, freq_maps, cols=["card1"])
+    big_out = apply_freq_maps(big, freq_maps, cols=["card1"])
+    assert small_out.loc[0, "card1_count"] == 7.0
+    assert big_out.loc[0, "card1_count"] == 7.0

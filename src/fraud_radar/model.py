@@ -11,6 +11,19 @@ Split (strictly time-ordered, no shuffling):
   4. Isotonic regression is fit on the validation slice's predicted
      probabilities vs. true labels, to correct LightGBM's raw scores into
      calibrated probabilities.
+  5. Count-encoding frequency maps (card1/addr1/P_emaildomain -> count) are
+     fit on the train slice only (step 3's first 90%), before the booster
+     ever sees a `_count` feature, and reused as-is to recompute those
+     columns for the validation slice and holdout -- see
+     `fraud_radar.features.fit_freq_maps`/`apply_freq_maps`. Saved to
+     `outputs/checkpoints/freq_maps.json`.
+  6. The review policy -- the score cutoff for the review queue -- is fit
+     separately from calibration: `REVIEW_TOP_FRACTION` (0.02) of the
+     validation slice's calibrated scores, by rank, gives `fitted_cutoff`.
+     This is a probability score threshold picked to realize a target
+     review rate, not a fixed operating point -- it will differ run to run
+     as the model changes. Saved to
+     `outputs/checkpoints/review_policy.json`.
 
 Seed 26 everywhere a seed is accepted (LightGBM's own `seed` param; the
 split itself is deterministic by TransactionDT order, not randomized).
@@ -26,7 +39,7 @@ import numpy as np
 import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 
-from fraud_radar.features import CATEGORICAL_BASE
+from fraud_radar.features import CATEGORICAL_BASE, COUNT_ENCODE_COLS, apply_freq_maps, fit_freq_maps
 
 ROOT = Path(__file__).resolve().parents[2]
 CKPT_DIR = ROOT / "outputs" / "checkpoints"
@@ -47,6 +60,7 @@ LGB_PARAMS = {
 }
 NUM_BOOST_ROUND = 2000
 EARLY_STOPPING_ROUNDS = 100
+REVIEW_TOP_FRACTION = 0.02
 
 
 def time_split(feat: pd.DataFrame, labels: pd.Series, holdout_frac: float = 0.20, val_frac: float = 0.10):
@@ -80,6 +94,14 @@ def _feature_columns(feat: pd.DataFrame) -> list[str]:
 def train(feat: pd.DataFrame, labels: pd.Series) -> dict:
     train_idx, val_idx, holdout_idx, cutoff_dt, val_cutoff_dt = time_split(feat, labels)
 
+    # Count-encoding maps must be fit on the train slice only -- fitting on
+    # the full frame (as build_features does by default) leaks
+    # validation/holdout population frequency into features those rows are
+    # later scored on. Recompute the *_count columns for the whole frame
+    # with the train-only maps before anything is scored.
+    freq_maps = fit_freq_maps(feat.iloc[train_idx], COUNT_ENCODE_COLS)
+    feat = apply_freq_maps(feat, freq_maps, COUNT_ENCODE_COLS)
+
     feature_cols = _feature_columns(feat)
     cat_cols = _categorical_columns(feat)
 
@@ -112,11 +134,28 @@ def train(feat: pd.DataFrame, labels: pd.Series) -> dict:
     calibrator = IsotonicRegression(out_of_bounds="clip")
     calibrator.fit(val_raw_pred, y_val)
 
+    # Review policy: the cutoff is the calibrated score at the
+    # REVIEW_TOP_FRACTION percentile of the validation slice, fit
+    # separately from the probability calibration above. This is a
+    # different quantity from "score >= a fixed probability" -- it is
+    # whatever probability realizes the target review rate on this model's
+    # actual score distribution, and moves run to run.
+    val_calibrated = calibrator.predict(val_raw_pred)
+    fitted_cutoff = float(np.percentile(val_calibrated, 100 * (1 - REVIEW_TOP_FRACTION)))
+    review_policy = {
+        "top_fraction": REVIEW_TOP_FRACTION,
+        "fitted_cutoff": round(fitted_cutoff, 6),
+        "fitted_on": "validation",
+        "n_validation": len(val_idx),
+    }
+
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
     booster.save_model(str(CKPT_DIR / "lgb_model.txt"))
     joblib.dump(calibrator, CKPT_DIR / "calibrator.joblib")
     (CKPT_DIR / "feature_columns.json").write_text(json.dumps(feature_cols, indent=2))
     (CKPT_DIR / "categorical_columns.json").write_text(json.dumps(cat_cols, indent=2))
+    (CKPT_DIR / "freq_maps.json").write_text(json.dumps(freq_maps, indent=2))
+    (CKPT_DIR / "review_policy.json").write_text(json.dumps(review_policy, indent=2))
 
     split_info = {
         "n_total": len(feat),
@@ -152,6 +191,14 @@ def load() -> tuple[lgb.Booster, IsotonicRegression, list[str], list[str]]:
     feature_cols = json.loads((CKPT_DIR / "feature_columns.json").read_text())
     cat_cols = json.loads((CKPT_DIR / "categorical_columns.json").read_text())
     return booster, calibrator, feature_cols, cat_cols
+
+
+def load_freq_maps() -> dict[str, dict[str, int]]:
+    return json.loads((CKPT_DIR / "freq_maps.json").read_text())
+
+
+def load_review_policy() -> dict:
+    return json.loads((CKPT_DIR / "review_policy.json").read_text())
 
 
 def predict_calibrated(booster: lgb.Booster, calibrator: IsotonicRegression, X: pd.DataFrame) -> np.ndarray:
