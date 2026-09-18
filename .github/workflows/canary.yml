@@ -1,0 +1,60 @@
+name: canary
+# Live Eval canary: every six hours, score the LIVE endpoint on the fixed held-out
+# canary set (canary/rows.json), compare with the recorded metric, and append one
+# record to this repo's public ledger branch. giggitai.com/live-eval reads
+# ledger/latest.json and ledger/runs.jsonl from raw.githubusercontent.com.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: canary
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]" 2>/dev/null || pip install -e .
+      - name: Run the canary against the live endpoint
+        id: canary
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set +e
+          python -m fraud_radar.canary > record.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat record.json
+          python3 -c "import json; json.load(open('record.json'))"
+      - name: Append the record to the ledger branch
+        env:
+          GIT_AUTHOR_NAME: Alpha N
+          GIT_AUTHOR_EMAIL: 45754668+alphan-ml@users.noreply.github.com
+          GIT_COMMITTER_NAME: Alpha N
+          GIT_COMMITTER_EMAIL: 45754668+alphan-ml@users.noreply.github.com
+        run: |
+          set -eu
+          cp record.json /tmp/record.json
+          read -r system metric observed recorded < <(python3 -c "import json; r=json.load(open('/tmp/record.json')); print(r['system'], r['metric'], r['observed'], r['recorded'])")
+          if git ls-remote --exit-code --heads origin ledger > /dev/null 2>&1; then
+            git fetch origin ledger && git checkout -B ledger origin/ledger
+          else
+            git checkout --orphan ledger && git rm -rf -q . || true
+            mkdir -p ledger && : > ledger/runs.jsonl && echo '{}' > ledger/latest.json
+            git add ledger && git commit -q -m "canary: initialize ledger"
+          fi
+          mkdir -p ledger
+          cat /tmp/record.json >> ledger/runs.jsonl; echo >> ledger/runs.jsonl
+          cp /tmp/record.json ledger/latest.json
+          git add ledger && git commit -q -m "canary: ${system} ${metric} ${observed} (recorded ${recorded})" && git push origin ledger
+      - name: Fail the job when the canary did not match
+        if: steps.canary.outputs.exit_code != '0'
+        run: exit 1

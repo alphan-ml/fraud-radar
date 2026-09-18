@@ -256,6 +256,51 @@ access-control-allow-methods: GET,OPTIONS,POST
 access-control-allow-headers: content-type
 ```
 
+## Live Eval canary
+
+A scheduled job (`.github/workflows/canary.yml`, cron `17 */6 * * *` plus
+manual `workflow_dispatch`) scores a fixed set of real transactions against
+the LIVE `/score` endpoint above -- not a local copy of the model -- and
+compares the observed ROC-AUC to the recorded holdout value in
+`outputs/metrics.json` (0.8935, tolerance 0.030). This is what feeds
+giggitai.com's public Live Eval tab.
+
+- **What runs**: `src/fraud_radar/canary.py` sends one POST per row in
+  `canary/rows.json` to the live endpoint, computes ROC-AUC of the returned
+  `calibrated_probability` against each row's true `isFraud` label, and
+  prints one JSON record to stdout. No fallback numbers -- a request that
+  errors (timeout, bad response, missing field) counts toward `errors` and
+  forces `match: false` for that run; the canary reports what the live
+  endpoint does right now, not what the model would have said.
+- **Canary set**: 500 real transactions from the time-ordered HOLDOUT split
+  (`outputs/split_info.json` defines the cutoff), 50 of them fraud (well
+  above the required floor of 40), picked deterministically -- evenly
+  spaced by `TransactionDT` within each label, not random or hand-picked --
+  by `scripts/build_canary_rows.py`. `tests/test_canary_rows.py` proves
+  every row's `TransactionDT` falls on the holdout side of the recorded
+  split cutoff.
+- **When**: every 6 hours (`17 */6 * * *`, UTC), or on demand via
+  `workflow_dispatch`.
+- **Where the ledger is**: every run appends one JSON record to
+  `ledger/runs.jsonl` and overwrites `ledger/latest.json` on this repo's
+  `ledger` branch -- an orphan branch with no relation to `main`'s history,
+  committed as `Alpha N <45754668+alphan-ml@users.noreply.github.com>`.
+  giggitai.com reads both files from `raw.githubusercontent.com`.
+- **How to read `match`**: `true` means the live endpoint's observed
+  ROC-AUC on the canary set was within `tolerance` (0.030) of the recorded
+  value and every row scored without error. `false` means either the
+  metric drifted past tolerance or at least one request failed -- check
+  `errors` and `observed` in the record to tell which.
+
+Example record (real run against the live endpoint, 2026-09-17):
+
+```json
+{"ts": "2026-09-17T23:03:03Z", "system": "fraud-radar", "kind": "canary", "release": "6d97b60", "endpoint": "https://r3skxlusm4.execute-api.us-east-1.amazonaws.com/score", "n": 500, "metric": "roc_auc", "recorded": 0.8935432901709163, "observed": 0.895422, "tolerance": 0.03, "match": true, "p50_ms": 121, "p95_ms": 154, "errors": 0, "duration_s": 61.5}
+```
+
+Run it by hand: `python3 -m fraud_radar.canary` (prints the record to
+stdout; add `--n 5` to try a handful of rows first).
+
 ## What this repo does not do
 
 No file on giggitai.com is written by this repo (the live API below is
