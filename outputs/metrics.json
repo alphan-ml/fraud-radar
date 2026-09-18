@@ -4,14 +4,14 @@
   "holdout_fraud_rate": 0.034409,
   "roc_auc": 0.8932274628703882,
   "pr_auc": 0.5255517309889581,
-  "brier_score": 0.02152068771838559,
+  "brier_score": 0.021520687718407806,
   "review_queue": [
     {
       "top_fraction": 0.005,
       "n_reviewed": 591,
-      "true_positives": 544,
-      "precision": 0.9205,
-      "recall": 0.1339
+      "true_positives": 543,
+      "precision": 0.9188,
+      "recall": 0.1336
     },
     {
       "top_fraction": 0.01,
@@ -23,16 +23,16 @@
     {
       "top_fraction": 0.02,
       "n_reviewed": 2362,
-      "true_positives": 1725,
-      "precision": 0.7303,
-      "recall": 0.4245
+      "true_positives": 1736,
+      "precision": 0.735,
+      "recall": 0.4272
     },
     {
       "top_fraction": 0.05,
       "n_reviewed": 5905,
-      "true_positives": 2365,
-      "precision": 0.4005,
-      "recall": 0.5819
+      "true_positives": 2361,
+      "precision": 0.3998,
+      "recall": 0.581
     }
   ],
   "review_policy": {
@@ -51,13 +51,13 @@
       "bin": 1,
       "count": 11810,
       "mean_predicted": 0.000877,
-      "observed_fraud_rate": 0.001609
+      "observed_fraud_rate": 0.001439
     },
     {
       "bin": 2,
       "count": 11811,
       "mean_predicted": 0.001447,
-      "observed_fraud_rate": 0.002455
+      "observed_fraud_rate": 0.002625
     },
     {
       "bin": 3,
@@ -69,43 +69,43 @@
       "bin": 4,
       "count": 11811,
       "mean_predicted": 0.00177,
-      "observed_fraud_rate": 0.005503
+      "observed_fraud_rate": 0.004911
     },
     {
       "bin": 5,
       "count": 11811,
       "mean_predicted": 0.002723,
-      "observed_fraud_rate": 0.007789
+      "observed_fraud_rate": 0.008382
     },
     {
       "bin": 6,
       "count": 11810,
       "mean_predicted": 0.006582,
-      "observed_fraud_rate": 0.009653
+      "observed_fraud_rate": 0.009568
     },
     {
       "bin": 7,
       "count": 11811,
       "mean_predicted": 0.010708,
-      "observed_fraud_rate": 0.015917
+      "observed_fraud_rate": 0.01651
     },
     {
       "bin": 8,
       "count": 11811,
       "mean_predicted": 0.017446,
-      "observed_fraud_rate": 0.026416
+      "observed_fraud_rate": 0.026331
     },
     {
       "bin": 9,
       "count": 11811,
       "mean_predicted": 0.037629,
-      "observed_fraud_rate": 0.037423
+      "observed_fraud_rate": 0.036661
     },
     {
       "bin": 10,
       "count": 11811,
       "mean_predicted": 0.260486,
-      "observed_fraud_rate": 0.233596
+      "observed_fraud_rate": 0.233934
     }
   ],
   "top_feature_importance": [
