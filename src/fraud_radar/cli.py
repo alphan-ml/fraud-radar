@@ -117,14 +117,17 @@ def step_eval(force: bool = False) -> None:
     labels = pd.read_parquet(OUT_DIR / "labels.parquet")["isFraud"].to_numpy()
 
     booster, calibrator, feature_cols, _cat_cols = model_mod.load()
+    freq_maps = model_mod.load_freq_maps()
+    review_policy = model_mod.load_review_policy()
     split_idx = model_mod.load_split_idx()
     holdout_idx = split_idx["holdout_idx"]
 
+    feat = features_mod.apply_freq_maps(feat, freq_maps)
     X_holdout = feat[feature_cols].iloc[holdout_idx]
     y_holdout = labels[holdout_idx]
     scores = model_mod.predict_calibrated(booster, calibrator, X_holdout)
 
-    metrics = eval_mod.evaluate(y_holdout, scores, booster, feature_cols)
+    metrics = eval_mod.evaluate(y_holdout, scores, booster, feature_cols, review_policy)
 
     # 10 anonymized example holdout rows: masked TransactionID, amount,
     # product code, calibrated score, true label. Not typed by hand --

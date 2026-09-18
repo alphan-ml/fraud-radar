@@ -1,70 +1,70 @@
 [
   {
     "example_id": "HOLDOUT-01",
-    "amount_log": 5.17,
-    "product_code": "R",
+    "amount_log": 4.089,
+    "product_code": "C",
     "calibrated_score": 1.0,
     "true_label": 1
   },
   {
     "example_id": "HOLDOUT-02",
-    "amount_log": 3.289,
+    "amount_log": 3.481,
     "product_code": "C",
-    "calibrated_score": 0.051873,
+    "calibrated_score": 0.053068,
     "true_label": 0
   },
   {
     "example_id": "HOLDOUT-03",
-    "amount_log": 3.807,
+    "amount_log": 4.585,
     "product_code": "W",
-    "calibrated_score": 0.02164,
+    "calibrated_score": 0.023229,
     "true_label": 0
   },
   {
     "example_id": "HOLDOUT-04",
-    "amount_log": 6.786,
-    "product_code": "W",
-    "calibrated_score": 0.010185,
-    "true_label": 1
+    "amount_log": 5.017,
+    "product_code": "R",
+    "calibrated_score": 0.01181,
+    "true_label": 0
   },
   {
     "example_id": "HOLDOUT-05",
-    "amount_log": 4.7,
+    "amount_log": 4.094,
     "product_code": "W",
-    "calibrated_score": 0.007243,
+    "calibrated_score": 0.006582,
     "true_label": 0
   },
   {
     "example_id": "HOLDOUT-06",
-    "amount_log": 4.007,
-    "product_code": "W",
-    "calibrated_score": 0.002618,
+    "amount_log": 4.615,
+    "product_code": "H",
+    "calibrated_score": 0.001875,
     "true_label": 0
   },
   {
     "example_id": "HOLDOUT-07",
-    "amount_log": 4.5,
+    "amount_log": 3.219,
     "product_code": "W",
-    "calibrated_score": 0.002122,
+    "calibrated_score": 0.00172,
     "true_label": 0
   },
   {
     "example_id": "HOLDOUT-08",
-    "amount_log": 5.817,
+    "amount_log": 4.99,
     "product_code": "W",
-    "calibrated_score": 0.001706,
+    "calibrated_score": 0.001615,
     "true_label": 0
   },
   {
     "example_id": "HOLDOUT-09",
-    "amount_log": 3.932,
-    "product_code": "S",
-    "calibrated_score": 0.000552,
+    "amount_log": 3.464,
+    "product_code": "W",
+    "calibrated_score": 0.001426,
     "true_label": 0
   },
   {
     "example_id": "HOLDOUT-10",
-    "amount_log": 3.401,
+    "amount_log": 5.252,
     "product_code": "W",
     "calibrated_score": 0.0,
     "true_label": 0

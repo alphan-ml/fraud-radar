@@ -32,6 +32,9 @@ def fake_outputs(tmp_path, monkeypatch):
         "holdout_n": 2, "holdout_fraud_count": 1, "holdout_fraud_rate": 0.5,
         "review_queue": [{"top_fraction": 0.01, "n_reviewed": 1, "true_positives": 1,
                            "precision": 1.0, "recall": 1.0}],
+        "review_policy": {"top_fraction": 0.02, "fitted_cutoff": 0.05, "fitted_on": "validation",
+                           "n_validation": 1, "holdout_review_rate": 0.5, "holdout_n_reviewed": 1,
+                           "holdout_true_positives": 1, "holdout_precision": 1.0, "holdout_recall": 1.0},
         "calibration_table": [{"bin": 1, "count": 2, "mean_predicted": 0.5,
                                 "observed_fraud_rate": 0.5}],
         "top_feature_importance": [{"feature": "amt_log", "gain": 100.0, "gain_share": 1.0}],
@@ -48,7 +51,7 @@ def fake_outputs(tmp_path, monkeypatch):
 def test_export_shape(fake_outputs):
     site_data = export_mod.export()
     assert site_data["model"] == "fraud-radar"
-    for key in ("dataset_facts", "split", "metrics", "review_queue",
+    for key in ("dataset_facts", "split", "metrics", "review_queue", "review_policy",
                 "calibration_table", "top_feature_importance", "example_rows"):
         assert key in site_data
     assert len(site_data["example_rows"]) == 10

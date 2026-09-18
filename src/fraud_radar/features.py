@@ -15,7 +15,16 @@ Feature groups:
     note on the dataset -- so only hour-of-day and elapsed-day-index are
     meaningful, not a calendar date).
   - Count encodings (frequency of each value, computed independently of
-    isFraud) for card1, addr1, P_emaildomain.
+    isFraud) for card1, addr1, P_emaildomain -- fit with `fit_freq_maps` on
+    a training slice only and passed in as `freq_maps=`, so serving and
+    evaluation see the same population frequencies the model trained on
+    instead of recomputing counts on whatever frame happens to be at hand
+    (one row at serving time -> every count would otherwise be 1.0). An
+    unseen key (a card1/addr1/P_emaildomain value never seen in the
+    training slice) maps to 0. If `freq_maps` is omitted, `build_features`
+    falls back to fitting on its own input, which is only appropriate for
+    ad hoc/exploratory calls -- `model.train()` always supplies maps fit on
+    the training slice.
 
 `build_features` never reads the `isFraud` column -- it is dropped from the
 input at the top of the function before any feature is computed, so a
@@ -52,10 +61,55 @@ def _numeric_prefixed(columns: list[str], prefix: str) -> list[str]:
     return out
 
 
-def build_features(df: pd.DataFrame) -> pd.DataFrame:
+def _stringify(s: pd.Series) -> pd.Series:
+    """Stringifies a (possibly categorical) column with a stable "nan"
+    placeholder for missing values. Plain `.astype(str)` on a pandas
+    category dtype leaves missing entries as float NaN instead of the
+    string "nan", so they would never match a fitted missing-value bucket
+    in a dict keyed by strings -- every missing value would count as
+    "unseen" (0) regardless of how common missingness was in training."""
+    return s.astype(object).where(s.notna(), "nan").astype(str)
+
+
+def fit_freq_maps(
+    df: pd.DataFrame, cols: list[str] = COUNT_ENCODE_COLS
+) -> dict[str, dict[str, int]]:
+    """Frequency maps (value, stringified -> count) for `cols`, fit on
+    whatever rows are in `df`. Call this on a training slice only -- fitting
+    on validation/holdout/serving rows is exactly the leak `apply_freq_maps`
+    exists to avoid."""
+    maps: dict[str, dict[str, int]] = {}
+    for c in cols:
+        counts = _stringify(df[c]).value_counts(dropna=False)
+        maps[c] = {str(k): int(v) for k, v in counts.items()}
+    return maps
+
+
+def apply_freq_maps(
+    df: pd.DataFrame, freq_maps: dict[str, dict[str, int]], cols: list[str] = COUNT_ENCODE_COLS
+) -> pd.DataFrame:
+    """Maps each column in `cols` to its fitted count via `freq_maps`,
+    written to `f"{col}_count"`. A value not present in the fitted map
+    (unseen at fit time) maps to 0."""
+    df = df.copy()
+    for c in cols:
+        fmap = freq_maps.get(c, {})
+        df[f"{c}_count"] = _stringify(df[c]).map(fmap).fillna(0.0).astype("float32")
+    return df
+
+
+def build_features(
+    df: pd.DataFrame, freq_maps: dict[str, dict[str, int]] | None = None
+) -> pd.DataFrame:
     """Build the model-ready feature frame. Input must have TransactionID and
     TransactionDT; isFraud, if present, is dropped immediately and never
-    read again in this function."""
+    read again in this function.
+
+    `freq_maps`, if given, must be the output of `fit_freq_maps` on a
+    training slice -- it is used to compute card1_count/addr1_count/
+    P_emaildomain_count so serving and evaluation match training. If
+    omitted, the maps are fit on `df` itself (only correct when `df` is the
+    same population the model should score, e.g. ad hoc exploration)."""
     df = df.drop(columns=["isFraud"], errors="ignore").copy()
 
     out = pd.DataFrame(index=df.index)
@@ -98,9 +152,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         out[c] = pd.to_numeric(df[c], errors="coerce").astype("float32")
 
     # -- count encodings (independent of isFraud) --
-    for c in COUNT_ENCODE_COLS:
-        counts = df[c].value_counts(dropna=False)
-        out[f"{c}_count"] = df[c].map(counts).astype("float32")
+    if freq_maps is None:
+        freq_maps = fit_freq_maps(out, COUNT_ENCODE_COLS)
+    out = apply_freq_maps(out, freq_maps, COUNT_ENCODE_COLS)
 
     return out
 

@@ -62,6 +62,7 @@ def export() -> dict:
             "holdout_fraud_rate": metrics["holdout_fraud_rate"],
         },
         "review_queue": metrics["review_queue"],
+        "review_policy": metrics["review_policy"],
         "calibration_table": metrics["calibration_table"],
         "top_feature_importance": metrics["top_feature_importance"],
         "example_rows": examples,

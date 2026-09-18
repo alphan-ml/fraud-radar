@@ -43,6 +43,32 @@ def review_queue_table(y_true: np.ndarray, y_score: np.ndarray) -> list[dict]:
     return rows
 
 
+def review_policy_metrics(y_true: np.ndarray, y_score: np.ndarray, review_policy: dict) -> dict:
+    """Realized review rate/precision/recall on `y_true`/`y_score` (the
+    untouched holdout) at `review_policy["fitted_cutoff"]` -- the score
+    cutoff fit on the validation slice by `fraud_radar.model.train`, not a
+    fixed probability constant. `review_policy` is whatever
+    `outputs/checkpoints/review_policy.json` holds (top_fraction,
+    fitted_cutoff, fitted_on, n_validation)."""
+    cutoff = review_policy["fitted_cutoff"]
+    flagged = y_score >= cutoff
+    n = len(y_true)
+    n_reviewed = int(flagged.sum())
+    true_positives = int(np.logical_and(flagged, y_true == 1).sum())
+    total_pos = int(y_true.sum())
+    return {
+        "top_fraction": review_policy["top_fraction"],
+        "fitted_cutoff": cutoff,
+        "fitted_on": review_policy["fitted_on"],
+        "n_validation": review_policy["n_validation"],
+        "holdout_review_rate": round(n_reviewed / n, 4) if n else float("nan"),
+        "holdout_n_reviewed": n_reviewed,
+        "holdout_true_positives": true_positives,
+        "holdout_precision": round(true_positives / n_reviewed, 4) if n_reviewed else float("nan"),
+        "holdout_recall": round(true_positives / total_pos, 4) if total_pos else float("nan"),
+    }
+
+
 def calibration_table(y_true: np.ndarray, y_score: np.ndarray, n_bins: int = 10) -> list[dict]:
     order = np.argsort(y_score)
     y_sorted = y_true[order]
@@ -79,7 +105,9 @@ def feature_importance_table(booster, feature_cols: list[str], top_n: int = 15) 
     ]
 
 
-def evaluate(y_true: np.ndarray, y_score: np.ndarray, booster, feature_cols: list[str]) -> dict:
+def evaluate(
+    y_true: np.ndarray, y_score: np.ndarray, booster, feature_cols: list[str], review_policy: dict
+) -> dict:
     roc_auc = float(roc_auc_score(y_true, y_score))
     pr_auc = float(average_precision_score(y_true, y_score))
     brier = float(brier_score_loss(y_true, y_score))
@@ -92,6 +120,7 @@ def evaluate(y_true: np.ndarray, y_score: np.ndarray, booster, feature_cols: lis
         "pr_auc": pr_auc,
         "brier_score": brier,
         "review_queue": review_queue_table(y_true, y_score),
+        "review_policy": review_policy_metrics(y_true, y_score, review_policy),
         "calibration_table": calibration_table(y_true, y_score),
         "top_feature_importance": feature_importance_table(booster, feature_cols),
     }
