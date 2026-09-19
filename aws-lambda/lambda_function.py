@@ -110,8 +110,19 @@ def _load_models() -> None:
     s3 = boto3.client("s3")
     for fname in ASSET_FILES:
         local_path = f"/tmp/{fname}"
-        if not os.path.exists(local_path):
+        if os.path.exists(local_path):
+            continue
+        try:
             s3.download_file(S3_BUCKET, f"{MODEL_PREFIX}/{fname}", local_path)
+        except Exception:
+            # group_stats.json exists only for feature-pass F3 and later. A prefix
+            # without it (the F2 model) still loads; the F3 columns are simply not in
+            # that prefix's feature_columns.json, so their values are never selected.
+            if fname == "group_stats.json":
+                with open(local_path, "w") as f:
+                    f.write("{}")
+            else:
+                raise
 
     _booster = lgb.Booster(model_file="/tmp/lgb_model.txt")
     with open("/tmp/feature_columns.json") as f:

@@ -1,0 +1,111 @@
+name: release-model
+# One-click model release. Trains the model on the code at the chosen ref (same split,
+# seed, and calibration as the pipeline), regenerates the handler files from the trained
+# model, verifies the handler against them to six decimals, uploads the model assets to
+# S3 under a fresh prefix, points the Lambda at that prefix, then commits the regenerated
+# handler files back to the branch so the repo and the served model match.
+# Nothing here is typed by hand: every number comes out of the pipeline run.
+on:
+  workflow_dispatch:
+    inputs:
+      prefix:
+        description: "S3 prefix for this release (e.g. models-f3). A new prefix keeps the old model in place for rollback."
+        required: true
+        default: models-f3
+permissions:
+  contents: write
+  id-token: write
+concurrency: release-${{ github.ref }}
+env:
+  FUNCTION_NAME: fraud-score-transaction
+  MODEL_BUCKET: giggit-fraud-radar-models
+  API_URL: https://r3skxlusm4.execute-api.us-east-1.amazonaws.com
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python3 -m pip install -q --upgrade pip
+          python3 -m pip install -q -e ".[dev]" kaggle boto3
+      - name: Fetch the competition data
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          mkdir -p data/raw
+          kaggle competitions download -c ieee-fraud-detection -p data/raw
+          ls -la data/raw
+      - name: Train, evaluate, export (same split and seed as the pipeline)
+        run: python3 -m fraud_radar.cli all --force
+      - name: Regenerate the handler files from the trained model
+        run: python3 aws-lambda/build_verification.py
+      - name: Verify the handler against the regenerated examples (six decimals)
+        run: python3 aws-lambda/verify_lambda_local.py
+      - name: Tests and hygiene
+        run: |
+          python3 -m pytest -q
+          python3 -m ruff check .
+          bash scripts/hygiene.sh
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Upload the model assets to S3 under the release prefix
+        run: |
+          set -e
+          P="${{ github.event.inputs.prefix }}"
+          aws s3 cp outputs/checkpoints/lgb_model.txt "s3://$MODEL_BUCKET/$P/lgb_model.txt" --no-progress
+          for f in feature_columns.json cat_code_maps.json isotonic_thresholds.json count_maps.json group_stats.json review_policy.json examples.json; do
+            aws s3 cp "aws-lambda/$f" "s3://$MODEL_BUCKET/$P/$f" --no-progress
+          done
+          aws s3 ls "s3://$MODEL_BUCKET/$P/"
+      - name: Point the Lambda at the release prefix (keeps other env vars)
+        run: |
+          set -e
+          P="${{ github.event.inputs.prefix }}"
+          CUR=$(aws lambda get-function-configuration --function-name "$FUNCTION_NAME" --query 'Environment.Variables' --output json)
+          NEW=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]) or {}; d['MODEL_PREFIX']=sys.argv[2]; print(json.dumps({'Variables': d}))" "$CUR" "$P")
+          aws lambda update-function-configuration --function-name "$FUNCTION_NAME" --environment "$NEW" --output text --query 'LastModified'
+          aws lambda wait function-updated --function-name "$FUNCTION_NAME"
+      - name: Swap the handler zip (same steps as deploy-lambda)
+        run: |
+          set -e
+          aws s3 cp "s3://$MODEL_BUCKET/lambda-code/deploy.zip" deploy.zip --no-progress
+          (cd aws-lambda && zip -q ../deploy.zip lambda_function.py cat_code_maps.json examples.json feature_columns.json isotonic_thresholds.json)
+          aws s3 cp deploy.zip "s3://$MODEL_BUCKET/lambda-code/deploy.zip" --no-progress
+          aws lambda update-function-code --function-name "$FUNCTION_NAME" --s3-bucket "$MODEL_BUCKET" --s3-key lambda-code/deploy.zip --output text --query 'LastModified'
+          aws lambda wait function-updated --function-name "$FUNCTION_NAME"
+      - name: Smoke test against the live endpoint
+        run: |
+          sleep 8
+          curl -sf --retry 5 --retry-delay 5 "$API_URL/health"
+          python3 - <<'PY'
+          import json, os, urllib.request
+          api = os.environ["API_URL"]
+          ex = json.load(open("aws-lambda/examples.json"))
+          ex = ex.get("examples", ex) if isinstance(ex, dict) else ex
+          bad = 0
+          for e in ex[:10]:
+              req = urllib.request.Request(api + "/score", data=json.dumps(e["input"]).encode(), headers={"content-type": "application/json"})
+              live = json.loads(urllib.request.urlopen(req, timeout=30).read())
+              ok = abs(float(live["calibrated_probability"]) - float(e["calibrated_probability"])) < 1e-6
+              print(e["example_id"], live["calibrated_probability"], e["calibrated_probability"], "OK" if ok else "DIFF")
+              bad += (not ok)
+          raise SystemExit(1 if bad else 0)
+          PY
+      - name: Commit the regenerated handler files and outputs
+        run: |
+          git config user.name "Alpha N"
+          git config user.email "45754668+alphan-ml@users.noreply.github.com"
+          git add aws-lambda/*.json outputs/*.json README.md || true
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "Release ${{ github.event.inputs.prefix }}: handler files and outputs regenerated from the trained model"
+          git push
