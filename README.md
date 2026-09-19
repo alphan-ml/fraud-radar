@@ -252,12 +252,13 @@ docstring for the full spec of each. Summary:
   maps are: `aws-lambda/count_maps.json` is the updated
   `outputs/checkpoints/freq_maps.json` (now includes `uid` alongside
   `card1`/`addr1`/`P_emaildomain`); `aws-lambda/group_stats.json` is the new
-  group-aggregate maps. Neither `aws-lambda/lambda_function.py` nor its
-  other serving artifacts (`feature_columns.json`, `cat_code_maps.json`,
-  `isotonic_thresholds.json`, `examples.json`) were touched -- the Lambda's
-  pure-numpy feature reimplementation would need updating to match the new
-  feature set, and per this task's scope, deploy is the owner's call after
-  review.
+  group-aggregate maps. `aws-lambda/lambda_function.py`'s pure-numpy
+  reimplementation and `aws-lambda/feature_columns.json` have since been
+  updated to match the new feature set (see "How the handler mirrors
+  score.py" below); `cat_code_maps.json` / `isotonic_thresholds.json` /
+  `examples.json` still need regenerating from the F3 booster once one is
+  trained in an environment with S3/model-checkpoint access -- see
+  `aws-lambda/DEPLOY.md`. Deploy is still the owner's call after review.
 - Retraining used the identical split, seed (26), `scale_pos_weight`, and
   isotonic-calibration procedure as before -- only the feature set changed.
 
@@ -320,23 +321,37 @@ pure numpy:
 
 - **Category codes** for the 14 LightGBM categorical columns (`card1-6`,
   `addr1`, `addr2`, `P_emaildomain`, `R_emaildomain`, `ProductCD`,
-  `DeviceType`, `DeviceInfo`, `M4`) come directly from the
-  `pandas_categorical` section embedded in the trained model file itself
-  -- the exact codes LightGBM's own `_data_from_pandas` uses at predict
-  time (`.cat.set_categories(category)` then `.cat.codes`, confirmed by
-  reading `lightgbm/basic.py` in the installed package) -- not
-  recomputed, so encoding is byte-identical by construction.
-  `aws-lambda/cat_code_maps.json`.
+  `DeviceType`, `DeviceInfo`, `M4`) plus `uid` (feature pass F3) come
+  directly from the `pandas_categorical` section embedded in the trained
+  model file itself -- the exact codes LightGBM's own `_data_from_pandas`
+  uses at predict time (`.cat.set_categories(category)` then
+  `.cat.codes`, confirmed by reading `lightgbm/basic.py` in the installed
+  package) -- not recomputed, so encoding is byte-identical by
+  construction. `aws-lambda/cat_code_maps.json`.
 - **Count-encoded columns** (`card1_count`, `addr1_count`,
-  `P_emaildomain_count`): looked up from `aws-lambda/count_maps.json` (the
-  same `outputs/checkpoints/freq_maps.json` fit on the training slice by
-  `fraud_radar.model.train()`), downloaded from S3 like the other assets.
-  A value not present in the map -- unseen in the training slice, or a
-  missing field -- looks up 0, matching
+  `P_emaildomain_count`, `uid_count`): looked up from
+  `aws-lambda/count_maps.json` (the same `outputs/checkpoints/freq_maps.json`
+  fit on the training slice by `fraud_radar.model.train()`), downloaded
+  from S3 like the other assets. A value not present in the map -- unseen
+  in the training slice, or a missing field -- looks up 0, matching
   `fraud_radar.features.apply_freq_maps()` exactly. (Previously these were
   hard-coded to `1.0` to match a `score.py` bug where the map was
   recomputed on whatever frame was at hand -- a single row at serving
   time. Fixed in both places together; see README "Design decisions".)
+- **Group aggregates, `uid`, and time deltas** (feature pass F3): the
+  `card1`/`card1_addr1`/`card1_P_emaildomain` count and mean(`amt_log`)
+  aggregates are looked up from `aws-lambda/group_stats.json` (downloaded
+  from S3, not bundled -- see `aws-lambda/DEPLOY.md`) the same way
+  `fraud_radar.features.apply_group_stats()` does, with the same unseen-key
+  defaults (`0` count / `NaN` mean); `uid`'s composite key
+  (`card1||addr1||account_start_day`) is built the same way
+  `_compute_uid()` builds it and then looked up in `cat_code_maps.json`
+  like any other categorical; `time_since_prev_card1`/
+  `time_since_prev_card1_addr1` are hard-coded `NaN`, matching
+  `score.py`'s own single-row `score_one()` (a lone transaction has no
+  history to diff against either way). `tests/test_lambda_features.py`
+  checks all of this against the real `build_features()` with synthetic
+  maps -- no trained model required for that check.
 - **Isotonic calibration**: `outputs/checkpoints/calibrator.joblib`'s
   106 sorted `(X_thresholds_, y_thresholds_)` pairs were extracted once
   (`aws-lambda/isotonic_thresholds.json`) and are applied with
@@ -378,6 +393,17 @@ model/artifacts until the owner runs the deploy step with the new
 `outputs/checkpoints/` and uploads the new S3 assets (see "Do not" in the
 originating issue -- deploying is explicitly the owner's step, not
 automated here).
+
+**This "0.0 max abs diff" number predates feature pass F3** and needs a
+fresh run: the handler and `feature_columns.json` now compute the F3
+features, but `cat_code_maps.json`/`isotonic_thresholds.json`/
+`examples.json`/`verification_rows.json` above are still the pre-F3 files
+(regenerating them needs the real trained F3 booster, which the F3-handler
+session had no access to -- no local checkpoint, no AWS credentials, and
+retraining was out of scope for that task). Run
+`aws-lambda/build_verification.py` then `aws-lambda/verify_lambda_local.py`
+on a machine with `outputs/checkpoints/` populated from the F3 training run
+before deploying -- see `aws-lambda/DEPLOY.md`.
 
 ### Live curl proof
 

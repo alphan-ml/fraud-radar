@@ -9,12 +9,14 @@ import pandas as pd
 sys.path.insert(0, "src")
 from fraud_radar.score import FraudScorer
 
-# count_maps.json / review_policy.json are the Lambda's local copies of the
-# same outputs/checkpoints/freq_maps.json and review_policy.json
-# FraudScorer.load() below reads -- kept in aws-lambda/ (like
-# cat_code_maps.json and isotonic_thresholds.json) so verify_lambda_local.py
-# and a real deploy can stage them without hitting S3.
+# count_maps.json / group_stats.json / review_policy.json are the Lambda's
+# local copies of the same outputs/checkpoints/freq_maps.json,
+# group_stats.json, and review_policy.json FraudScorer.load() below reads --
+# kept in aws-lambda/ (like cat_code_maps.json and isotonic_thresholds.json)
+# so verify_lambda_local.py and a real deploy can stage them without hitting
+# S3.
 shutil.copy("outputs/checkpoints/freq_maps.json", "aws-lambda/count_maps.json")
+shutil.copy("outputs/checkpoints/group_stats.json", "aws-lambda/group_stats.json")
 shutil.copy("outputs/checkpoints/review_policy.json", "aws-lambda/review_policy.json")
 
 npz = np.load("outputs/checkpoints/split_idx.npz")
