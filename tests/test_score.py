@@ -51,7 +51,7 @@ def test_score_one_matches_batch_prediction_path():
     result = scorer.score_one(txn)
 
     raw_df = pd.DataFrame([txn])
-    feat = build_features(raw_df, freq_maps=scorer.freq_maps)
+    feat = build_features(raw_df, freq_maps=scorer.freq_maps, group_stats_maps=scorer.group_stats_maps)
     for c in scorer.feature_cols:
         if c not in feat.columns:
             feat[c] = pd.NA
@@ -101,7 +101,7 @@ def test_score_one_matches_the_same_row_scored_inside_a_batch():
 
     single_result = scorer.score_one(batch.iloc[0].to_dict())
 
-    feat_batch = build_features(batch, freq_maps=scorer.freq_maps)
+    feat_batch = build_features(batch, freq_maps=scorer.freq_maps, group_stats_maps=scorer.group_stats_maps)
     for c in scorer.cat_cols:
         if c in feat_batch.columns:
             feat_batch[c] = feat_batch[c].astype("category")

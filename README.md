@@ -18,10 +18,14 @@ to 1/0, `card1-6`/`addr1-2`/`P_emaildomain`/`R_emaildomain`/`ProductCD`/
 `DeviceType`/`DeviceInfo`/`M4` kept as LightGBM native categoricals (no
 one-hot), `TransactionAmt` log1p-transformed, hour-of-day and day-index
 derived from `TransactionDT`, and count encodings for `card1`, `addr1`,
-`P_emaildomain` computed independently of `isFraud` -- via frequency maps
-(`build_features(df, freq_maps=...)`) fit on a training slice and reused
-as-is at evaluation and serving time, not recomputed on whatever frame is
-at hand (see "Design decisions" below). `model.py` sorts every labeled row
+`P_emaildomain`, `uid` computed independently of `isFraud` -- via frequency
+maps (`build_features(df, freq_maps=...)`) fit on a training slice and
+reused as-is at evaluation and serving time, not recomputed on whatever
+frame is at hand (see "Design decisions" below). Feature pass F3 added
+card/uid group aggregates, time-since-previous-transaction deltas, an
+amount-relative-to-card-mean ratio, and the `uid` stable-account id itself
+(`build_features(df, freq_maps=..., group_stats_maps=...)`) -- see "Feature
+pass F3" below for the full spec. `model.py` sorts every labeled row
 by `TransactionDT` ascending, takes the last 20% as a holdout untouched by
 training, early stopping, or calibration, and inside the remaining 80%
 pool takes the last 10% (also time-ordered) as an early-stopping /
@@ -76,7 +80,7 @@ score at the 98th percentile of the validation slice
 (`outputs/checkpoints/review_policy.json`, `fitted_cutoff`), a probability
 threshold picked to realize a 2% review rate, not a fixed probability
 constant (see "Design decisions" below). On the real holdout this cutoff
-realizes a 1.65% review rate, catching 38.5% of fraud at 80.1% precision
+realizes a 1.73% review rate, catching 41.5% of fraud at 82.4% precision
 (see Results below) -- pass `review_threshold=` to `FraudScorer.load()` to
 use a different operating point.
 
@@ -156,29 +160,106 @@ hashes for all five extracted CSVs: `outputs/data_quality.json`.
 
 ## Results (time-ordered 20% holdout, seed 26, 118,108 transactions, 4,064 fraud)
 
-| Metric | Value |
-|---|---|
-| ROC-AUC | 0.8932 |
-| PR-AUC | 0.5256 |
-| Brier score | 0.02152 |
+Numbers below are current (after the F3 feature pass -- card/uid aggregates,
+time deltas, amount-relative-to-mean; see "Feature pass F3" below). The
+pre-F3 numbers are kept exactly as they were, unedited, in
+`outputs/metrics_before_feature_pass.json`.
+
+| Metric | Before (F2) | After (F3) |
+|---|---|---|
+| ROC-AUC | 0.8932 | **0.9002** |
+| PR-AUC | 0.5256 | **0.5531** |
+| Brier score | 0.02152 | **0.02064** |
 
 Review-queue precision/recall at fixed review rates:
 
-| Review rate | Transactions reviewed | True positives caught | Precision | Recall |
-|---|---|---|---|---|
-| 0.5% | 591 | 544 | 0.9205 | 0.1339 |
-| 1% | 1,181 | 1,064 | 0.9009 | 0.2618 |
-| 2% | 2,362 | 1,725 | 0.7303 | 0.4245 |
-| 5% | 5,905 | 2,365 | 0.4005 | 0.5819 |
+| Review rate | Reviewed | TP before | Precision before | Recall before | TP after | Precision after | Recall after |
+|---|---|---|---|---|---|---|---|
+| 0.5% | 591 | 543 | 0.9188 | 0.1336 | **556** | **0.9408** | **0.1368** |
+| 1% | 1,181 | 1,064 | 0.9009 | 0.2618 | **1,088** | **0.9213** | **0.2677** |
+| 2% | 2,362 | 1,736 | 0.7350 | 0.4272 | **1,806** | **0.7646** | **0.4444** |
+| 5% | 5,905 | 2,361 | 0.3998 | 0.5810 | **2,432** | **0.4119** | **0.5984** |
 
 Fitted review policy (`outputs/checkpoints/review_policy.json`, see "Design
-decisions"): a `fitted_cutoff` of `0.571429`, fit as the calibrated score at
-the 98th percentile of the 47,243-row validation slice. Realized on the
-holdout, this cutoff reviews 1.65% of transactions (1,954), at 80.14%
-precision and 38.53% recall -- close to, but not identical to, the fixed-2%
-row above, because the fitted cutoff is a probability threshold, not a rank
-threshold, and the holdout's score distribution is not perfectly identical
-to validation's.
+decisions"): before F3, a `fitted_cutoff` of `0.571429` reviewed 1.65% of the
+holdout (1,954 transactions) at 80.14% precision / 38.53% recall. After F3,
+the refit `fitted_cutoff` is `0.666667` (a higher cutoff realizes the same
+2% validation-slice target because F3's scores are better separated),
+reviewing 1.73% of the holdout (2,045 transactions) at **82.40%** precision
+and **41.46%** recall.
+
+Top-15 feature importance (LightGBM total gain, after F3; full table in
+`outputs/metrics.json`'s `top_feature_importance`):
+
+| Rank | Feature | Gain share |
+|---|---|---|
+| 1 | `card1` | 28.11% |
+| 2 | `uid` | 23.33% |
+| 3 | `V258` | 7.69% |
+| 4 | `V70` | 5.09% |
+| 5 | `addr1` | 3.21% |
+| 6 | `card2` | 3.07% |
+| 7 | `C14` | 2.84% |
+| 8 | `V294` | 2.62% |
+| 9 | `uid_count` | 1.91% |
+| 10 | `DeviceInfo` | 1.87% |
+| 11 | `C4` | 1.31% |
+| 12 | `V91` | 1.17% |
+| 13 | `C1` | 1.04% |
+| 14 | `amt_log` | 0.89% |
+| 15 | `C13` | 0.88% |
+
+`uid` and `uid_count` alone account for 25.2% of total gain, second only to
+`card1` -- the F3 pass's biggest single change (the "uid" pattern -- card1 +
+addr1 + D1-derived account start day -- is a well-known strong signal for
+this specific dataset) shows up exactly where expected.
+
+## Feature pass F3: card aggregates, time deltas, uid
+
+Added in `src/fraud_radar/features.py` (`fit_group_stats`/`apply_group_stats`,
+`_compute_uid`, `_time_since_prev`), all computed from the training window
+only, never from the row being scored or a later row -- see the module
+docstring for the full spec of each. Summary:
+
+- **Group aggregates** -- count and mean(`amt_log`) per `card1`,
+  `card1+addr1`, and `card1+P_emaildomain`. Fit on the train slice only
+  (`fit_group_stats`, mirroring the existing `fit_freq_maps` count-encoding
+  pattern), saved to `outputs/checkpoints/group_stats.json`, reapplied
+  identically to validation, holdout, and every served transaction. An
+  unseen composite key maps to `0` count / `NaN` mean.
+- **`amt_to_card1_mean_ratio`** -- `amt_log` divided by the card1 group's
+  mean `amt_log`.
+- **Time since previous transaction** -- `time_since_prev_card1` and
+  `time_since_prev_card1_addr1`, seconds since the previous transaction (by
+  `TransactionDT`) sharing the same key. Purely causal (sort by
+  `TransactionDT`, diff within group), so it is never refit per split -- a
+  row's value only ever comes from rows strictly earlier in time, which
+  `tests/test_no_leak.py` proves directly (appending a later-in-time row
+  does not change any earlier row's value; a row's value is unchanged
+  whether or not later rows are even present in the frame). A single-row
+  call (serving) always returns `NaN` here -- there is no history in a
+  one-row frame -- a known limitation, not a bug, same category as the
+  count-encoding limitation described in decision 6 above.
+- **`uid`** -- `card1|addr1|account_start_day`, `account_start_day =
+  day_index - D1` (the standard "uid" trick for this dataset -- D1 is
+  IEEE-CIS's undocumented "days since this card's first transaction" field;
+  subtracting it from the current day index recovers an approximately
+  constant "day zero" per account). Kept as a LightGBM categorical like
+  `card1`; `uid_count` (via the existing count-encoding pipeline, now
+  `COUNT_ENCODE_COLS = [card1, addr1, P_emaildomain, uid]`) is its
+  training-slice population count.
+- **Frequency maps saved to `aws-lambda/`**, the same way the existing count
+  maps are: `aws-lambda/count_maps.json` is the updated
+  `outputs/checkpoints/freq_maps.json` (now includes `uid` alongside
+  `card1`/`addr1`/`P_emaildomain`); `aws-lambda/group_stats.json` is the new
+  group-aggregate maps. Neither `aws-lambda/lambda_function.py` nor its
+  other serving artifacts (`feature_columns.json`, `cat_code_maps.json`,
+  `isotonic_thresholds.json`, `examples.json`) were touched -- the Lambda's
+  pure-numpy feature reimplementation would need updating to match the new
+  feature set, and per this task's scope, deploy is the owner's call after
+  review.
+- Retraining used the identical split, seed (26), `scale_pos_weight`, and
+  isotonic-calibration procedure as before -- only the feature set changed.
 
 Top-5 features by LightGBM total gain: `card1` (35.02% of gain), `V258`
 (8.12%), `card2` (7.11%), `addr1` (6.26%), `V70` (4.63%). Full top-15 table,

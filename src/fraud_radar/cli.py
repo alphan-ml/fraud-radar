@@ -118,11 +118,16 @@ def step_eval(force: bool = False) -> None:
 
     booster, calibrator, feature_cols, _cat_cols = model_mod.load()
     freq_maps = model_mod.load_freq_maps()
+    group_stats_maps = model_mod.load_group_stats()
     review_policy = model_mod.load_review_policy()
     split_idx = model_mod.load_split_idx()
     holdout_idx = split_idx["holdout_idx"]
 
     feat = features_mod.apply_freq_maps(feat, freq_maps)
+    feat = features_mod.apply_group_stats(feat, group_stats_maps)
+    feat["amt_to_card1_mean_ratio"] = (
+        feat["amt_log"] / feat["card1_mean_amt"].replace(0.0, np.nan)
+    ).astype("float32")
     X_holdout = feat[feature_cols].iloc[holdout_idx]
     y_holdout = labels[holdout_idx]
     scores = model_mod.predict_calibrated(booster, calibrator, X_holdout)

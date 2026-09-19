@@ -39,7 +39,15 @@ import numpy as np
 import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 
-from fraud_radar.features import CATEGORICAL_BASE, COUNT_ENCODE_COLS, apply_freq_maps, fit_freq_maps
+from fraud_radar.features import (
+    CATEGORICAL_BASE,
+    COUNT_ENCODE_COLS,
+    GROUP_STATS_DEFS,
+    apply_freq_maps,
+    apply_group_stats,
+    fit_freq_maps,
+    fit_group_stats,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 CKPT_DIR = ROOT / "outputs" / "checkpoints"
@@ -102,6 +110,16 @@ def train(feat: pd.DataFrame, labels: pd.Series) -> dict:
     freq_maps = fit_freq_maps(feat.iloc[train_idx], COUNT_ENCODE_COLS)
     feat = apply_freq_maps(feat, freq_maps, COUNT_ENCODE_COLS)
 
+    # Same leakage concern for the F3 group aggregates (card1/card1+addr1/
+    # card1+P_emaildomain count and mean(amt_log), and the amt_to_card1_mean
+    # ratio that depends on card1_mean_amt) -- fit on the train slice only,
+    # then recompute for the whole frame.
+    group_stats_maps = fit_group_stats(feat.iloc[train_idx], GROUP_STATS_DEFS)
+    feat = apply_group_stats(feat, group_stats_maps, GROUP_STATS_DEFS)
+    feat["amt_to_card1_mean_ratio"] = (
+        feat["amt_log"] / feat["card1_mean_amt"].replace(0.0, np.nan)
+    ).astype("float32")
+
     feature_cols = _feature_columns(feat)
     cat_cols = _categorical_columns(feat)
 
@@ -155,6 +173,7 @@ def train(feat: pd.DataFrame, labels: pd.Series) -> dict:
     (CKPT_DIR / "feature_columns.json").write_text(json.dumps(feature_cols, indent=2))
     (CKPT_DIR / "categorical_columns.json").write_text(json.dumps(cat_cols, indent=2))
     (CKPT_DIR / "freq_maps.json").write_text(json.dumps(freq_maps, indent=2))
+    (CKPT_DIR / "group_stats.json").write_text(json.dumps(group_stats_maps, indent=2))
     (CKPT_DIR / "review_policy.json").write_text(json.dumps(review_policy, indent=2))
 
     split_info = {
@@ -195,6 +214,10 @@ def load() -> tuple[lgb.Booster, IsotonicRegression, list[str], list[str]]:
 
 def load_freq_maps() -> dict[str, dict[str, int]]:
     return json.loads((CKPT_DIR / "freq_maps.json").read_text())
+
+
+def load_group_stats() -> dict[str, dict[str, dict[str, float]]]:
+    return json.loads((CKPT_DIR / "group_stats.json").read_text())
 
 
 def load_review_policy() -> dict:
