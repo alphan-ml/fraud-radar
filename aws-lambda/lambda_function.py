@@ -48,7 +48,6 @@ import json
 import math
 import os
 
-import boto3
 import lightgbm as lgb
 import numpy as np
 
@@ -107,6 +106,8 @@ def _load_models() -> None:
     global _count_maps, _group_stats, _review_threshold
     if _booster is not None:
         return
+    import boto3  # in the Lambda runtime; imported here so the tests load the module without it
+
     s3 = boto3.client("s3")
     for fname in ASSET_FILES:
         local_path = f"/tmp/{fname}"
@@ -374,6 +375,8 @@ def handler(event, context):
             with open("/tmp/examples.json") as f:
                 examples = json.load(f)
         except FileNotFoundError:
+            import boto3
+
             s3 = boto3.client("s3")
             s3.download_file(S3_BUCKET, f"{MODEL_PREFIX}/examples.json", "/tmp/examples.json")
             with open("/tmp/examples.json") as f:
