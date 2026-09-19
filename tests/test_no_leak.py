@@ -46,3 +46,37 @@ def test_build_features_output_has_no_isfraud_column():
     df = _rows(4, [0, 1, 0, 1])
     feat = build_features(df)
     assert "isFraud" not in feat.columns
+
+
+def test_time_since_prev_at_time_t_equals_value_from_rows_strictly_before_t():
+    """F3 requirement: a time-delta feature for a transaction at time t must
+    equal the value computed from rows strictly before t -- appending a row
+    that happens later in time must not change any earlier row's value."""
+    df = _rows(4, [0, 0, 0, 0])
+    df["card1"] = [1001, 1001, 1001, 1001]  # same card1 throughout
+    feat_before = build_features(df)
+
+    later_row = df.iloc[[0]].copy()
+    later_row["TransactionID"] = 999
+    later_row["TransactionDT"] = df["TransactionDT"].max() + 100_000  # strictly later than every existing row
+    df_with_future_row = pd.concat([df, later_row], ignore_index=True)
+    feat_after = build_features(df_with_future_row)
+
+    original_rows = feat_after[feat_after["TransactionID"] != 999].reset_index(drop=True)
+    pd.testing.assert_series_equal(
+        feat_before["time_since_prev_card1"], original_rows["time_since_prev_card1"]
+    )
+
+
+def test_time_since_prev_ignores_rows_that_come_after_it_even_when_present():
+    """The same property stated the other way: an earlier row's value must
+    match what you'd get computing it from only the rows before it, not from
+    the full frame (which also contains later rows)."""
+    df = _rows(3, [0, 0, 0])
+    df["card1"] = [1001, 1001, 1001]
+    full_feat = build_features(df)
+
+    prefix_only = df.iloc[:2].copy()
+    prefix_feat = build_features(prefix_only)
+
+    assert full_feat.loc[1, "time_since_prev_card1"] == prefix_feat.loc[1, "time_since_prev_card1"]

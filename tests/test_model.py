@@ -23,14 +23,18 @@ def _synthetic_feat_labels(n: int = N, seed: int = 0) -> tuple[pd.DataFrame, pd.
     card1 = pd.array(card1_values, dtype="string").astype("category")
     addr1 = pd.array(["addr0"] * n, dtype="string").astype("category")
     email = pd.array(["gmail.com"] * n, dtype="string").astype("category")
+    uid_values = [f"uid{i % 4}" for i in range(n - 10)] + ["uid4"] * 10
+    uid = pd.array(uid_values, dtype="string").astype("category")
 
     feat = pd.DataFrame({
         "TransactionID": np.arange(n),
         "TransactionDT": dt,
         "x1": rng.normal(size=n).astype("float32"),
+        "amt_log": rng.uniform(0.0, 5.0, size=n).astype("float32"),
         "card1": card1,
         "addr1": addr1,
         "P_emaildomain": email,
+        "uid": uid,
     })
     labels = pd.Series((rng.random(n) < 0.2).astype(int))
     return feat, labels
@@ -55,6 +59,26 @@ def test_freq_maps_are_fit_on_train_slice_only(monkeypatch, tmp_path):
     freq_maps = json.loads((tmp_path / "outputs" / "checkpoints" / "freq_maps.json").read_text())
     assert "card4" not in freq_maps["card1"]  # never seen in the train slice
     assert freq_maps["card1"]["card0"] == expected_card0_count
+
+
+def test_group_stats_are_fit_on_train_slice_only(monkeypatch, tmp_path):
+    _patch_for_fast_train(monkeypatch, tmp_path)
+    feat, labels = _synthetic_feat_labels()
+
+    train_idx = model_mod.time_split(feat, labels)[0]
+    train_card1_addr1 = (
+        feat["card1"].astype(str).iloc[train_idx] + "||" + feat["addr1"].astype(str).iloc[train_idx]
+    )
+    expected_card0_addr0_count = int((train_card1_addr1 == "card0||addr0").sum())
+
+    model_mod.train(feat, labels)
+
+    group_stats = json.loads((tmp_path / "outputs" / "checkpoints" / "group_stats.json").read_text())
+    # card4 only appears in the last 10 rows (the holdout) -- never in train.
+    assert "card4||addr0" not in group_stats["card1_addr1"]["count"]
+    assert group_stats["card1_addr1"]["count"]["card0||addr0"] == expected_card0_addr0_count
+    assert "mean_amt" in group_stats["card1_addr1"]
+    assert "mean_amt" in group_stats["card1"]
 
 
 def test_review_policy_is_saved_with_expected_shape(monkeypatch, tmp_path):

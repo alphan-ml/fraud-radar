@@ -8,6 +8,6 @@
   "train_fraud_rate": 0.035149074881993654,
   "val_fraud_rate": 0.03501047774273437,
   "scale_pos_weight": 27.450250920040148,
-  "best_iteration": 523,
+  "best_iteration": 416,
   "seed": 26
 }

@@ -2,187 +2,187 @@
   "holdout_n": 118108,
   "holdout_fraud_count": 4064,
   "holdout_fraud_rate": 0.034409,
-  "roc_auc": 0.8932274628703882,
-  "pr_auc": 0.5255517309889581,
-  "brier_score": 0.021520687718407806,
+  "roc_auc": 0.9002233165566431,
+  "pr_auc": 0.5531317358656824,
+  "brier_score": 0.020639643213252307,
   "review_queue": [
     {
       "top_fraction": 0.005,
       "n_reviewed": 591,
-      "true_positives": 543,
-      "precision": 0.9188,
-      "recall": 0.1336
+      "true_positives": 556,
+      "precision": 0.9408,
+      "recall": 0.1368
     },
     {
       "top_fraction": 0.01,
       "n_reviewed": 1181,
-      "true_positives": 1064,
-      "precision": 0.9009,
-      "recall": 0.2618
+      "true_positives": 1088,
+      "precision": 0.9213,
+      "recall": 0.2677
     },
     {
       "top_fraction": 0.02,
       "n_reviewed": 2362,
-      "true_positives": 1736,
-      "precision": 0.735,
-      "recall": 0.4272
+      "true_positives": 1806,
+      "precision": 0.7646,
+      "recall": 0.4444
     },
     {
       "top_fraction": 0.05,
       "n_reviewed": 5905,
-      "true_positives": 2361,
-      "precision": 0.3998,
-      "recall": 0.581
+      "true_positives": 2432,
+      "precision": 0.4119,
+      "recall": 0.5984
     }
   ],
   "review_policy": {
     "top_fraction": 0.02,
-    "fitted_cutoff": 0.571429,
+    "fitted_cutoff": 0.666667,
     "fitted_on": "validation",
     "n_validation": 47243,
-    "holdout_review_rate": 0.0165,
-    "holdout_n_reviewed": 1954,
-    "holdout_true_positives": 1566,
-    "holdout_precision": 0.8014,
-    "holdout_recall": 0.3853
+    "holdout_review_rate": 0.0173,
+    "holdout_n_reviewed": 2045,
+    "holdout_true_positives": 1685,
+    "holdout_precision": 0.824,
+    "holdout_recall": 0.4146
   },
   "calibration_table": [
     {
       "bin": 1,
       "count": 11810,
-      "mean_predicted": 0.000877,
-      "observed_fraud_rate": 0.001439
+      "mean_predicted": 0.000182,
+      "observed_fraud_rate": 0.000677
     },
     {
       "bin": 2,
       "count": 11811,
-      "mean_predicted": 0.001447,
-      "observed_fraud_rate": 0.002625
+      "mean_predicted": 0.001011,
+      "observed_fraud_rate": 0.001947
     },
     {
       "bin": 3,
       "count": 11811,
-      "mean_predicted": 0.001615,
-      "observed_fraud_rate": 0.003725
+      "mean_predicted": 0.001062,
+      "observed_fraud_rate": 0.001693
     },
     {
       "bin": 4,
       "count": 11811,
-      "mean_predicted": 0.00177,
-      "observed_fraud_rate": 0.004911
+      "mean_predicted": 0.001951,
+      "observed_fraud_rate": 0.005842
     },
     {
       "bin": 5,
       "count": 11811,
-      "mean_predicted": 0.002723,
-      "observed_fraud_rate": 0.008382
+      "mean_predicted": 0.003386,
+      "observed_fraud_rate": 0.007874
     },
     {
       "bin": 6,
       "count": 11810,
-      "mean_predicted": 0.006582,
-      "observed_fraud_rate": 0.009568
+      "mean_predicted": 0.004744,
+      "observed_fraud_rate": 0.011854
     },
     {
       "bin": 7,
       "count": 11811,
-      "mean_predicted": 0.010708,
-      "observed_fraud_rate": 0.01651
+      "mean_predicted": 0.009694,
+      "observed_fraud_rate": 0.016595
     },
     {
       "bin": 8,
       "count": 11811,
-      "mean_predicted": 0.017446,
-      "observed_fraud_rate": 0.026331
+      "mean_predicted": 0.02045,
+      "observed_fraud_rate": 0.022945
     },
     {
       "bin": 9,
       "count": 11811,
-      "mean_predicted": 0.037629,
-      "observed_fraud_rate": 0.036661
+      "mean_predicted": 0.034081,
+      "observed_fraud_rate": 0.036068
     },
     {
       "bin": 10,
       "count": 11811,
-      "mean_predicted": 0.260486,
-      "observed_fraud_rate": 0.233934
+      "mean_predicted": 0.260312,
+      "observed_fraud_rate": 0.238591
     }
   ],
   "top_feature_importance": [
     {
       "feature": "card1",
-      "gain": 3124145.0432243347,
-      "gain_share": 0.3502
+      "gain": 2491387.364616394,
+      "gain_share": 0.2811
+    },
+    {
+      "feature": "uid",
+      "gain": 2067682.720861435,
+      "gain_share": 0.2333
     },
     {
       "feature": "V258",
-      "gain": 724749.282913208,
-      "gain_share": 0.0812
-    },
-    {
-      "feature": "card2",
-      "gain": 634070.8084020615,
-      "gain_share": 0.0711
-    },
-    {
-      "feature": "addr1",
-      "gain": 558346.9780797958,
-      "gain_share": 0.0626
+      "gain": 681698.0948295593,
+      "gain_share": 0.0769
     },
     {
       "feature": "V70",
-      "gain": 413458.9927845001,
-      "gain_share": 0.0463
+      "gain": 450815.5130138397,
+      "gain_share": 0.0509
+    },
+    {
+      "feature": "addr1",
+      "gain": 284119.7917366028,
+      "gain_share": 0.0321
+    },
+    {
+      "feature": "card2",
+      "gain": 271824.0752630234,
+      "gain_share": 0.0307
     },
     {
       "feature": "C14",
-      "gain": 309343.8124303818,
-      "gain_share": 0.0347
+      "gain": 251692.90655326843,
+      "gain_share": 0.0284
     },
     {
-      "feature": "DeviceInfo",
-      "gain": 251616.0147895813,
-      "gain_share": 0.0282
-    },
-    {
-      "feature": "V317",
-      "gain": 233665.4061203003,
+      "feature": "V294",
+      "gain": 232575.40240859985,
       "gain_share": 0.0262
     },
     {
-      "feature": "D2",
-      "gain": 172183.0364370346,
-      "gain_share": 0.0193
+      "feature": "uid_count",
+      "gain": 169288.78664588928,
+      "gain_share": 0.0191
     },
     {
-      "feature": "card1_count",
-      "gain": 135755.90832138062,
-      "gain_share": 0.0152
+      "feature": "DeviceInfo",
+      "gain": 166041.73539066315,
+      "gain_share": 0.0187
     },
     {
-      "feature": "P_emaildomain",
-      "gain": 130025.8707485199,
-      "gain_share": 0.0146
-    },
-    {
-      "feature": "day_index",
-      "gain": 128841.56404685974,
-      "gain_share": 0.0144
-    },
-    {
-      "feature": "C8",
-      "gain": 127902.00049495697,
-      "gain_share": 0.0143
-    },
-    {
-      "feature": "amt_log",
-      "gain": 116832.72406387329,
+      "feature": "C4",
+      "gain": 115867.58968734741,
       "gain_share": 0.0131
     },
     {
       "feature": "V91",
-      "gain": 116739.6455116272,
-      "gain_share": 0.0131
+      "gain": 103449.97510147095,
+      "gain_share": 0.0117
+    },
+    {
+      "feature": "C1",
+      "gain": 92382.65317726135,
+      "gain_share": 0.0104
+    },
+    {
+      "feature": "amt_log",
+      "gain": 78481.28572845459,
+      "gain_share": 0.0089
+    },
+    {
+      "feature": "C13",
+      "gain": 77730.88445472717,
+      "gain_share": 0.0088
     }
   ]
 }
