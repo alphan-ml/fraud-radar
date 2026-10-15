@@ -45,6 +45,15 @@ jobs:
           ls -la data/raw
       - name: Train, evaluate, export (same split and seed as the pipeline)
         run: python3 -m fraud_radar.cli all --force
+      - name: Gate release on serving-compatible review performance
+        run: python3 -m fraud_radar.serving_parity --fail-on-regression
+      - name: Attach the parity report to this release
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fraud-serving-parity
+          path: outputs/serving_parity_diagnostic.json
+          if-no-files-found: ignore
       - name: Regenerate the handler files from the trained model
         run: python3 aws-lambda/build_verification.py
       - name: Verify the handler against the regenerated examples (six decimals)
